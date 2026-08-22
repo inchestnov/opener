@@ -26,12 +26,16 @@ func Launch(action Action, logger diagnostic.Logger) error {
 		return fmt.Errorf("unknown launch strategy: %v", action.Strategy)
 	}
 
-	logger.Debug("command: %s", formatCommand(cmd))
+	rendered := formatCommand(cmd)
+	logger.Debug("command: %s", rendered)
 
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("launching %s: %w", rendered, err)
+	}
+	return nil
 }
 
 // formatCommand renders cmd's argv for diagnostic output, quoting any
