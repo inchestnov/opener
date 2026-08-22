@@ -36,9 +36,20 @@ type Action struct {
 // each decision stage via diag.
 //
 // alias is empty for automatic mode ("opener <target>"), where targets
-// holds exactly one element. If that target is a file matching a pattern
-// under cfg.Open.Patterns (checked in order, first match wins), that rule
-// is used. A directory target uses cfg.Open.Directory if set. A URL target
+// holds exactly one element. If that element's name matches an entry in
+// cfg.Templates, it's a link: cfg.Templates[target].Path is opened instead,
+// regardless of what (if anything) exists on disk at the given name. A
+// template's App/Cmd, if set, launches that Path directly, taking priority
+// the same way an alias's App/Cmd does. Otherwise, the Path itself is
+// resolved exactly as if the user had typed it directly — so an unadorned
+// template (just a Path) picks up cfg.Open.Patterns/cfg.Open.Directory or
+// falls back to the system default, letting a template pin any combination
+// of "what" and "how": a file plus an app, a directory opened in Finder, a
+// file plus a CLI command, and so on.
+//
+// A non-template target is resolved the same way: a file matching a pattern
+// under cfg.Open.Patterns (checked in order, first match wins) uses that
+// rule. A directory target uses cfg.Open.Directory if set. A URL target
 // falls back to the system `open` command. An executable file, or a target
 // that cannot be resolved at all, is an error.
 //
@@ -56,6 +67,32 @@ func resolveAutomatic(targets []string, cfg *config.Config, diag diagnostic.Cont
 	logger := diag.Logger
 	target := targets[0]
 	logger.Debug("target: %s", target)
+
+	logger.Debug("checking templates")
+	if tmpl, ok := cfg.Templates[target]; ok {
+		logger.Debug("template matched: %s", target)
+		if tmpl.Path == "" {
+			return Action{}, fmt.Errorf("template %q has no path configured", target)
+		}
+		logger.Debug("template path: %s", tmpl.Path)
+
+		if tmpl.App != "" || tmpl.Cmd != "" {
+			logCommandOrApp(logger, tmpl.Cmd, tmpl.App)
+			return actionForRule(config.Rule{App: tmpl.App, Cmd: tmpl.Cmd}, []string{tmpl.Path}), nil
+		}
+		logger.Debug("template has no app/cmd; resolving its path like a typed target")
+		return resolvePath(tmpl.Path, cfg, diag)
+	}
+	logger.Debug("no template matched")
+
+	return resolvePath(target, cfg, diag)
+}
+
+// resolvePath resolves target (a real filesystem path or URL) the same way
+// for a plain automatic-mode target or a template's Path.
+func resolvePath(target string, cfg *config.Config, diag diagnostic.Context) (Action, error) {
+	logger := diag.Logger
+	targets := []string{target}
 
 	targetType := resolveTargetType(target)
 	logger.Debug("target type: %s", targetType)

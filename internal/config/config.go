@@ -31,10 +31,20 @@ type OpenConfig struct {
 	Patterns  []PatternRule `mapstructure:"patterns"`
 }
 
+// Template is a named shortcut to a fixed file or directory (Path), opened
+// either as a macOS GUI application (App) or a CLI executable (Cmd).
+// `opener <name>` launches Path, ignoring whatever exists on disk at <name>.
+type Template struct {
+	Path string `mapstructure:"path"`
+	App  string `mapstructure:"app"`
+	Cmd  string `mapstructure:"cmd"`
+}
+
 // Config is the parsed contents of ~/.opener.yaml.
 type Config struct {
-	Aliases map[string]Rule `mapstructure:"aliases"`
-	Open    OpenConfig      `mapstructure:"open"`
+	Aliases   map[string]Rule     `mapstructure:"aliases"`
+	Templates map[string]Template `mapstructure:"templates"`
+	Open      OpenConfig          `mapstructure:"open"`
 }
 
 // LoadConfig reads and parses the YAML config file at path. A missing file

@@ -148,6 +148,41 @@ open:
 
 Unlike the alias/`open.directory` form of `cmd` above, this one takes a whole command line rather than a bare executable — useful when you need fixed flags baked in. It's split into words the way a shell would (quotes honored), then run directly; no shell is ever invoked. Targets are appended to the end.
 
+### `templates` — a link to a fixed file or project
+
+```yaml
+templates:
+  payment-service:
+    path: ~/repos/payment-service
+    app: "Visual Studio Code"
+```
+
+```bash
+opener payment-service   # opens ~/repos/payment-service in Visual Studio Code
+```
+
+A template is a named shortcut, not a real target: `opener <name>` ignores
+whatever exists on disk at `<name>` and opens `path` instead. Checked before
+automatic-mode's usual file/directory/URL resolution, so a template name
+always wins over an on-disk file of the same name.
+
+`app`/`cmd` are optional. Set them to pin exactly how `path` opens, same as
+an alias. Leave both unset and `path` is resolved exactly as if you'd typed
+it directly — so a template can just pin *what* opens, and let `open.patterns`
+/ `open.directory` (or the system default) decide *how*:
+
+```yaml
+templates:
+  payment-service:
+    path: ~/repos/payment-service   # a directory -> opens in Finder (or open.directory, if set)
+  invoice:
+    path: ~/Downloads/invoice.pdf   # a file -> matched against open.patterns, same as any .pdf
+```
+
+Any combination works: a file pinned to an app, a directory pinned to a CLI
+command, or either left to fall back to whatever automatic mode would
+otherwise do.
+
 ### `open.directory` — override how directories open
 
 ```yaml

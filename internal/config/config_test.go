@@ -19,6 +19,9 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if len(cfg.Aliases) != 0 {
 		t.Errorf("Aliases = %v, want empty", cfg.Aliases)
 	}
+	if len(cfg.Templates) != 0 {
+		t.Errorf("Templates = %v, want empty", cfg.Templates)
+	}
 	if cfg.Open.Directory.App != "" || cfg.Open.Directory.Cmd != "" {
 		t.Errorf("Open.Directory = %+v, want zero value", cfg.Open.Directory)
 	}
@@ -35,6 +38,11 @@ aliases:
     app: "Visual Studio Code"
   editor:
     cmd: "nvim"
+
+templates:
+  payment-service:
+    path: /repos/payment-service
+    app: "Visual Studio Code"
 
 open:
   directory:
@@ -56,6 +64,9 @@ open:
 	}
 	if got, want := cfg.Aliases["editor"].Cmd, "nvim"; got != want {
 		t.Errorf("Aliases[editor].Cmd = %q, want %q", got, want)
+	}
+	if got, want := cfg.Templates["payment-service"], (Template{Path: "/repos/payment-service", App: "Visual Studio Code"}); got != want {
+		t.Errorf("Templates[payment-service] = %+v, want %+v", got, want)
 	}
 	if got, want := cfg.Open.Directory.Cmd, "open"; got != want {
 		t.Errorf("Open.Directory.Cmd = %q, want %q", got, want)

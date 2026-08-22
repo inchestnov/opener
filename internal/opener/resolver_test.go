@@ -90,6 +90,156 @@ func TestResolve_DirectoryRuleOverride(t *testing.T) {
 	}
 }
 
+func TestResolve_TemplateApp(t *testing.T) {
+	cfg := &config.Config{
+		Templates: map[string]config.Template{
+			"payment-service": {Path: "/repos/payment-service", App: "Visual Studio Code"},
+		},
+	}
+
+	action, err := Resolve("", []string{"payment-service"}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyApp || action.Name != "Visual Studio Code" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyApp %q", action.Strategy, action.Name, "Visual Studio Code")
+	}
+	if len(action.Args) != 1 || action.Args[0] != "/repos/payment-service" {
+		t.Errorf("Args = %v, want [/repos/payment-service]", action.Args)
+	}
+}
+
+func TestResolve_TemplateCmd(t *testing.T) {
+	cfg := &config.Config{
+		Templates: map[string]config.Template{
+			"payment-service": {Path: "/repos/payment-service", Cmd: "nvim"},
+		},
+	}
+
+	action, err := Resolve("", []string{"payment-service"}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyCommand || action.Name != "nvim" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyCommand nvim", action.Strategy, action.Name)
+	}
+	if len(action.Args) != 1 || action.Args[0] != "/repos/payment-service" {
+		t.Errorf("Args = %v, want [/repos/payment-service]", action.Args)
+	}
+}
+
+func TestResolve_TemplateTakesPriorityOverRealFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "payment-service")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{
+		Templates: map[string]config.Template{
+			file: {Path: "/repos/payment-service", App: "Visual Studio Code"},
+		},
+	}
+
+	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyApp || action.Name != "Visual Studio Code" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyApp %q (template should win over the on-disk file)", action.Strategy, action.Name, "Visual Studio Code")
+	}
+}
+
+func TestResolve_TemplateDirectoryWithoutAppFallsBackToFinder(t *testing.T) {
+	dir := t.TempDir()
+	project := filepath.Join(dir, "payment-service")
+	if err := os.Mkdir(project, 0o755); err != nil {
+		t.Fatalf("failed to create test fixture dir: %v", err)
+	}
+
+	cfg := &config.Config{
+		Templates: map[string]config.Template{
+			"payment-service": {Path: project},
+		},
+	}
+
+	action, err := Resolve("", []string{"payment-service"}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyFallback {
+		t.Errorf("Strategy = %v, want StrategyFallback (Finder via system open)", action.Strategy)
+	}
+	if len(action.Args) != 1 || action.Args[0] != project {
+		t.Errorf("Args = %v, want [%q]", action.Args, project)
+	}
+}
+
+func TestResolve_TemplateDirectoryWithoutAppUsesDirectoryRule(t *testing.T) {
+	dir := t.TempDir()
+	project := filepath.Join(dir, "payment-service")
+	if err := os.Mkdir(project, 0o755); err != nil {
+		t.Fatalf("failed to create test fixture dir: %v", err)
+	}
+
+	cfg := &config.Config{
+		Templates: map[string]config.Template{
+			"payment-service": {Path: project},
+		},
+		Open: config.OpenConfig{
+			Directory: config.Rule{App: "Visual Studio Code"},
+		},
+	}
+
+	action, err := Resolve("", []string{"payment-service"}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyApp || action.Name != "Visual Studio Code" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyApp %q (from open.directory)", action.Strategy, action.Name, "Visual Studio Code")
+	}
+}
+
+func TestResolve_TemplateFileWithoutAppUsesPatternRule(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "invoice.pdf")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{
+		Templates: map[string]config.Template{
+			"invoice": {Path: file},
+		},
+		Open: config.OpenConfig{
+			Patterns: []config.PatternRule{
+				{Pattern: "*.pdf", App: "Google Chrome"},
+			},
+		},
+	}
+
+	action, err := Resolve("", []string{"invoice"}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyApp || action.Name != "Google Chrome" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyApp %q (from open.patterns)", action.Strategy, action.Name, "Google Chrome")
+	}
+}
+
+func TestResolve_TemplateWithoutPathIsError(t *testing.T) {
+	cfg := &config.Config{
+		Templates: map[string]config.Template{
+			"payment-service": {App: "Visual Studio Code"},
+		},
+	}
+
+	_, err := Resolve("", []string{"payment-service"}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err == nil {
+		t.Fatal("Resolve() error = nil, want error for a template without a path")
+	}
+}
+
 func TestResolve_AliasApp(t *testing.T) {
 	cfg := &config.Config{
 		Aliases: map[string]config.Rule{
