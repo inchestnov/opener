@@ -79,23 +79,6 @@ $ opener foo .
 opener: unknown alias: foo
 ```
 
-### Verbose mode
-
-Add `-v` / `--verbose` (in any position) to see the full resolution trace on stderr — what target/type was detected, which config rule matched (or didn't), and the exact command that gets run. Verbose mode never changes behavior, only what gets printed.
-
-```bash
-opener -v document.pdf
-opener document.pdf -v
-opener -v ide .
-```
-
-### Other flags
-
-```bash
-opener --help
-opener --version
-```
-
 ## Configuration
 
 `opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, `opener` falls back to plain `open <target>` for everything.
