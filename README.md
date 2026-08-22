@@ -73,6 +73,13 @@ $ opener foo .
 opener: unknown alias: foo
 ```
 
+Typing `opener` in full gets old fast — add a shell alias:
+
+```bash
+alias o="opener"
+o docs.pdf
+```
+
 ## Configuration
 
 `opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, everything falls back to the system `open <target>`.

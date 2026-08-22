@@ -5,6 +5,7 @@
 *.test
 *.out
 .DS_Store
+.scratch/
 
 # Local tooling (CodeGraph, MCP, plugin/skill config) — not part of the project
 /.claude/
