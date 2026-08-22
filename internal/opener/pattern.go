@@ -10,14 +10,50 @@ import (
 )
 
 // matchPattern reports whether filename matches pattern, case-insensitively.
-// A bare extension pattern (starts with "." and has no glob metacharacters,
-// e.g. ".pdf") is treated as "*.pdf". Anything else is matched via
-// filepath.Match's glob syntax (*, ?, [...]).
+// A brace group (e.g. "*.{jpg,png}") expands into one alternative per
+// comma-separated term; filename matches if any alternative does. Within
+// each alternative, a bare extension (starts with "." and has no glob
+// metacharacters, e.g. ".pdf") is treated as "*.pdf". Anything else is
+// matched via filepath.Match's glob syntax (*, ?, [...]).
 func matchPattern(pattern, filename string) (bool, error) {
-	if strings.HasPrefix(pattern, ".") && !strings.ContainsAny(pattern, "*?[") {
-		pattern = "*" + pattern
+	filename = strings.ToLower(filename)
+	for _, alt := range expandBraces(strings.ToLower(pattern)) {
+		if strings.HasPrefix(alt, ".") && !strings.ContainsAny(alt, "*?[") {
+			alt = "*" + alt
+		}
+		matched, err := filepath.Match(alt, filename)
+		if err != nil {
+			return false, err
+		}
+		if matched {
+			return true, nil
+		}
 	}
-	return filepath.Match(strings.ToLower(pattern), strings.ToLower(filename))
+	return false, nil
+}
+
+// expandBraces expands the first "{a,b,c}" group in pattern into one string
+// per comma-separated term, recursing to expand any further groups in the
+// remainder. A pattern with no brace group expands to itself.
+func expandBraces(pattern string) []string {
+	start := strings.IndexByte(pattern, '{')
+	if start == -1 {
+		return []string{pattern}
+	}
+	end := strings.IndexByte(pattern[start:], '}')
+	if end == -1 {
+		return []string{pattern}
+	}
+	end += start
+
+	prefix, terms, suffix := pattern[:start], strings.Split(pattern[start+1:end], ","), pattern[end+1:]
+	var out []string
+	for _, term := range terms {
+		for _, rest := range expandBraces(suffix) {
+			out = append(out, prefix+term+rest)
+		}
+	}
+	return out
 }
 
 // actionForPatternRule builds the Action for a config.PatternRule against

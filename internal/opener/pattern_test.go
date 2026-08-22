@@ -16,6 +16,10 @@ func TestMatchPattern(t *testing.T) {
 		{"bare extension no match", ".pdf", "document.png", false},
 		{"literal filename match", "document.pdf", "document.pdf", true},
 		{"literal filename no match", "document.pdf", "other.pdf", false},
+		{"brace group first alternative matches", "*.{jpg,png}", "photo.jpg", true},
+		{"brace group second alternative matches", "*.{jpg,png}", "photo.png", true},
+		{"brace group no match", "*.{jpg,png}", "photo.gif", false},
+		{"brace group with bare extension", ".{jpg,png}", "photo.png", true},
 	}
 
 	for _, tt := range tests {

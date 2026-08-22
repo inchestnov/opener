@@ -125,6 +125,15 @@ opener document.pdf   # now opens in Chrome instead of the default app
 
 `pattern` can be a glob (`*.pdf`) or a bare extension (`.pdf`, treated the same as `*.pdf`), matched case-insensitively against the filename. Patterns are checked in order; the first match wins.
 
+To match several extensions with one rule, use a brace group:
+
+```yaml
+open:
+  patterns:
+    - pattern: "*.{jpg,png,gif}"
+      app: "Preview"
+```
+
 ### `cmd` — a full command line for pattern rules
 
 ```yaml
