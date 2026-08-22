@@ -22,8 +22,8 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.Open.Directory.App != "" || cfg.Open.Directory.Command != "" {
 		t.Errorf("Open.Directory = %+v, want zero value", cfg.Open.Directory)
 	}
-	if len(cfg.Open.Files) != 0 {
-		t.Errorf("Open.Files = %v, want empty", cfg.Open.Files)
+	if len(cfg.Open.Patterns) != 0 {
+		t.Errorf("Open.Patterns = %v, want empty", cfg.Open.Patterns)
 	}
 }
 
@@ -39,9 +39,11 @@ aliases:
 open:
   directory:
     command: "open"
-  files:
-    pdf:
+  patterns:
+    - pattern: "*.pdf"
       app: "Google Chrome"
+    - pattern: ".md"
+      cmd: "open -a 'Google Chrome'"
 `)
 
 	cfg, err := LoadConfig(path)
@@ -58,8 +60,14 @@ open:
 	if got, want := cfg.Open.Directory.Command, "open"; got != want {
 		t.Errorf("Open.Directory.Command = %q, want %q", got, want)
 	}
-	if got, want := cfg.Open.Files["pdf"].App, "Google Chrome"; got != want {
-		t.Errorf("Open.Files[pdf].App = %q, want %q", got, want)
+	if len(cfg.Open.Patterns) != 2 {
+		t.Fatalf("Open.Patterns = %v, want 2 entries", cfg.Open.Patterns)
+	}
+	if got, want := cfg.Open.Patterns[0], (PatternRule{Pattern: "*.pdf", App: "Google Chrome"}); got != want {
+		t.Errorf("Open.Patterns[0] = %+v, want %+v", got, want)
+	}
+	if got, want := cfg.Open.Patterns[1], (PatternRule{Pattern: ".md", Cmd: "open -a 'Google Chrome'"}); got != want {
+		t.Errorf("Open.Patterns[1] = %+v, want %+v", got, want)
 	}
 }
 

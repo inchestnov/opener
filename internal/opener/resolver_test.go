@@ -138,7 +138,7 @@ func TestResolve_UnknownAlias(t *testing.T) {
 	}
 }
 
-func TestResolve_PDFRuleOverride(t *testing.T) {
+func TestResolve_PatternRuleGlobApp(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "document.pdf")
 	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
@@ -147,8 +147,8 @@ func TestResolve_PDFRuleOverride(t *testing.T) {
 
 	cfg := &config.Config{
 		Open: config.OpenConfig{
-			Files: map[string]config.Rule{
-				"pdf": {App: "Google Chrome"},
+			Patterns: []config.PatternRule{
+				{Pattern: "*.pdf", App: "Google Chrome"},
 			},
 		},
 	}
@@ -168,7 +168,7 @@ func TestResolve_PDFRuleOverride(t *testing.T) {
 	}
 }
 
-func TestResolve_PDFRuleOverrideCaseInsensitiveExtension(t *testing.T) {
+func TestResolve_PatternRuleGlobCaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "document.PDF")
 	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
@@ -177,8 +177,8 @@ func TestResolve_PDFRuleOverrideCaseInsensitiveExtension(t *testing.T) {
 
 	cfg := &config.Config{
 		Open: config.OpenConfig{
-			Files: map[string]config.Rule{
-				"pdf": {App: "Safari"},
+			Patterns: []config.PatternRule{
+				{Pattern: "*.pdf", App: "Safari"},
 			},
 		},
 	}
@@ -192,7 +192,7 @@ func TestResolve_PDFRuleOverrideCaseInsensitiveExtension(t *testing.T) {
 	}
 }
 
-func TestResolve_PDFCommandRuleOverride(t *testing.T) {
+func TestResolve_PatternRuleBareExtension(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "document.pdf")
 	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
@@ -201,8 +201,9 @@ func TestResolve_PDFCommandRuleOverride(t *testing.T) {
 
 	cfg := &config.Config{
 		Open: config.OpenConfig{
-			Files: map[string]config.Rule{
-				"pdf": {Command: "qpdfview"},
+			// ".pdf" (no glob metacharacters) behaves like "*.pdf".
+			Patterns: []config.PatternRule{
+				{Pattern: ".pdf", App: "Safari"},
 			},
 		},
 	}
@@ -211,19 +212,80 @@ func TestResolve_PDFCommandRuleOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}
-	if action.Strategy != StrategyCommand || action.Name != "qpdfview" {
-		t.Errorf("got Strategy=%v Name=%q, want StrategyCommand qpdfview", action.Strategy, action.Name)
+	if action.Strategy != StrategyApp || action.Name != "Safari" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyApp Safari", action.Strategy, action.Name)
 	}
 }
 
-func TestResolve_PDFWithoutRuleFallsBack(t *testing.T) {
+func TestResolve_PatternRuleCmd(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "document.pdf")
 	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
 		t.Fatalf("failed to write test fixture: %v", err)
 	}
 
-	cfg := &config.Config{}
+	cfg := &config.Config{
+		Open: config.OpenConfig{
+			Patterns: []config.PatternRule{
+				{Pattern: ".pdf", Cmd: "open -a 'Google Chrome'"},
+			},
+		},
+	}
+
+	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyCommand {
+		t.Errorf("Strategy = %v, want StrategyCommand", action.Strategy)
+	}
+	if action.Name != "open" {
+		t.Errorf("Name = %q, want %q", action.Name, "open")
+	}
+	if want := []string{"-a", "Google Chrome", file}; !slicesEqual(action.Args, want) {
+		t.Errorf("Args = %v, want %v", action.Args, want)
+	}
+}
+
+func TestResolve_PatternRuleFirstMatchWins(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "document.pdf")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{
+		Open: config.OpenConfig{
+			Patterns: []config.PatternRule{
+				{Pattern: "document.pdf", App: "Safari"},
+				{Pattern: "*.pdf", App: "Google Chrome"},
+			},
+		},
+	}
+
+	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Name != "Safari" {
+		t.Errorf("Name = %q, want %q (first matching pattern should win)", action.Name, "Safari")
+	}
+}
+
+func TestResolve_PatternRuleWithoutMatchFallsBack(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "image.png")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{
+		Open: config.OpenConfig{
+			Patterns: []config.PatternRule{
+				{Pattern: "*.pdf", App: "Google Chrome"},
+			},
+		},
+	}
 
 	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
@@ -237,10 +299,9 @@ func TestResolve_PDFWithoutRuleFallsBack(t *testing.T) {
 	}
 }
 
-// File-type rule matching isn't hardcoded to pdf: it looks up whatever
-// extension key is present under open.files, so any configured extension
-// (not just pdf) resolves the same way.
-func TestResolve_NonPDFExtensionRuleOverride(t *testing.T) {
+// Pattern matching isn't hardcoded to pdf: any glob you configure is
+// checked, in order, against the target's filename.
+func TestResolve_NonPDFPatternRule(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "notes.md")
 	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
@@ -249,9 +310,9 @@ func TestResolve_NonPDFExtensionRuleOverride(t *testing.T) {
 
 	cfg := &config.Config{
 		Open: config.OpenConfig{
-			Files: map[string]config.Rule{
-				"pdf": {App: "Google Chrome"},
-				"md":  {Command: "nvim"},
+			Patterns: []config.PatternRule{
+				{Pattern: "*.pdf", App: "Google Chrome"},
+				{Pattern: "*.md", Cmd: "nvim"},
 			},
 		},
 	}
@@ -263,4 +324,16 @@ func TestResolve_NonPDFExtensionRuleOverride(t *testing.T) {
 	if action.Strategy != StrategyCommand || action.Name != "nvim" {
 		t.Errorf("got Strategy=%v Name=%q, want StrategyCommand nvim", action.Strategy, action.Name)
 	}
+}
+
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

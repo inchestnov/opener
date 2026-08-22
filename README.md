@@ -47,18 +47,29 @@ opener image.png        # no special rule -> system `open`, Launch Services deci
 opener https://github.com   # not a local path -> passed straight to `open`
 ```
 
-Override how a file type opens via `~/.opener.yaml`:
+Override how a file type opens via `~/.opener.yaml`, matching a glob pattern against the filename:
 
 ```yaml
 open:
-  files:
-    pdf:
+  patterns:
+    - pattern: "*.pdf"
       app: "Google Chrome"
 ```
 
 ```bash
 opener document.pdf     # now opens in Chrome instead of the default app
 ```
+
+`pattern` can also be a full command line instead of an app name, via `cmd` (word-split, never run through a shell):
+
+```yaml
+open:
+  patterns:
+    - pattern: ".pdf"
+      cmd: "open -a 'Google Chrome'"
+```
+
+Patterns are checked in order; the first match wins.
 
 For anything you want a shortcut to — not just file types — define an alias and pass it as the first argument, with the target(s) after it:
 

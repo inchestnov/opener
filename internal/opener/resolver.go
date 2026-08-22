@@ -36,10 +36,10 @@ type Action struct {
 // each decision stage via diag.
 //
 // alias is empty for automatic mode ("opener <target>"), where targets
-// holds exactly one element. If that target is a file whose extension has
-// a matching rule under cfg.Open.Files, that rule is used. A directory
-// target uses cfg.Open.Directory if set. Otherwise resolution falls back
-// to the system `open` command.
+// holds exactly one element. If that target is a file matching a pattern
+// under cfg.Open.Patterns (checked in order, first match wins), that rule
+// is used. A directory target uses cfg.Open.Directory if set. Otherwise
+// resolution falls back to the system `open` command.
 //
 // alias is non-empty for alias mode ("opener <alias> <target>..."), where
 // it is looked up in cfg.Aliases and launched as either a macOS application
@@ -70,19 +70,31 @@ func resolveAutomatic(targets []string, cfg *config.Config, diag diagnostic.Cont
 
 		logger.Debug("checking config: %s", diag.ConfigPath)
 
-		if rule, ok := cfg.Open.Files[ext]; ok {
-			logger.Debug("config rule found: open.files.%s", ext)
-			logFileRuleChoice(logger, rule)
-			return actionForRule(rule, targets), nil
+		base := filepath.Base(target)
+		for _, rule := range cfg.Open.Patterns {
+			matched, err := matchPattern(rule.Pattern, base)
+			if err != nil {
+				return Action{}, fmt.Errorf("invalid pattern %q: %w", rule.Pattern, err)
+			}
+			if !matched {
+				continue
+			}
+			logger.Debug("pattern matched: %s", rule.Pattern)
+			action, err := actionForPatternRule(rule, targets)
+			if err != nil {
+				return Action{}, err
+			}
+			logCommandOrApp(logger, rule.Cmd, rule.App)
+			return action, nil
 		}
-		logger.Debug("no config rule found for extension: %s", ext)
+		logger.Debug("no pattern matched")
 
 	case TargetDirectory:
 		logger.Debug("checking config: %s", diag.ConfigPath)
 
 		if rule := cfg.Open.Directory; rule.App != "" || rule.Command != "" {
 			logger.Debug("config rule found: open.directory")
-			logFileRuleChoice(logger, rule)
+			logCommandOrApp(logger, rule.Command, rule.App)
 			return actionForRule(rule, targets), nil
 		}
 		logger.Debug("no custom directory rule found")
@@ -110,15 +122,15 @@ func resolveAlias(alias string, targets []string, cfg *config.Config, logger dia
 	return actionForRule(rule, targets), nil
 }
 
-// logFileRuleChoice logs which of a Rule's App/Command forms will be used
-// for an automatic-mode open.files.<ext> or open.directory rule.
-func logFileRuleChoice(logger diagnostic.Logger, rule config.Rule) {
-	if rule.Command != "" {
-		logger.Debug("configured command: %s", rule.Command)
+// logCommandOrApp logs which of a command/app pair will be used to launch
+// a target. command takes precedence when both are set.
+func logCommandOrApp(logger diagnostic.Logger, command, app string) {
+	if command != "" {
+		logger.Debug("configured command: %s", command)
 		logger.Debug("launch strategy: CLI command")
 		return
 	}
-	logger.Debug("configured application: %s", rule.App)
+	logger.Debug("configured application: %s", app)
 	logger.Debug("launch strategy: macOS application")
 }
 

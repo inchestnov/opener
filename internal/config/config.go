@@ -15,10 +15,20 @@ type Rule struct {
 	Command string `mapstructure:"command"`
 }
 
+// PatternRule matches a target's filename against Pattern (a glob, e.g.
+// "*.pdf", or a bare extension like ".pdf") and opens it either as a
+// macOS GUI application (App) or as a full command line (Cmd, e.g.
+// "open -a 'Google Chrome'" - shell-word-split, never run through a shell).
+type PatternRule struct {
+	Pattern string `mapstructure:"pattern"`
+	App     string `mapstructure:"app"`
+	Cmd     string `mapstructure:"cmd"`
+}
+
 // OpenConfig configures automatic-mode resolution.
 type OpenConfig struct {
-	Directory Rule            `mapstructure:"directory"`
-	Files     map[string]Rule `mapstructure:"files"`
+	Directory Rule          `mapstructure:"directory"`
+	Patterns  []PatternRule `mapstructure:"patterns"`
 }
 
 // Config is the parsed contents of ~/.opener.yaml.
