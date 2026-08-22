@@ -33,13 +33,11 @@ go build -o bin/opener ./cmd/opener
 
 ## Usage
 
-### Automatic mode
-
 ```bash
 opener <target>
 ```
 
-A single argument opens `target` automatically: `opener` figures out whether it's a file, a directory, or something else (a URL, a nonexistent path) and picks how to open it.
+A single argument opens `target`: `opener` figures out whether it's a file, a directory, or something else (a URL, a nonexistent path) and opens it accordingly.
 
 ```bash
 opener document.pdf     # opens via the configured PDF rule, or the default app
@@ -49,21 +47,32 @@ opener image.png        # no special rule -> system `open`, Launch Services deci
 opener https://github.com   # not a local path -> passed straight to `open`
 ```
 
-### Alias mode
+Override how a file type opens via `~/.opener.yaml`:
 
-```bash
-opener <alias> <target> [target...]
+```yaml
+open:
+  files:
+    pdf:
+      app: "Google Chrome"
 ```
 
-Two or more arguments mean the first one is an alias name, looked up in your config, and the rest are targets passed to whatever that alias launches.
-
 ```bash
-opener ide .                 # opens . with the app configured for "ide"
-opener browser https://github.com
-opener editor README.md a.md b.md   # multiple targets, all passed to the same command
+opener document.pdf     # now opens in Chrome instead of the default app
 ```
 
-An alias that isn't in your config is an error:
+For anything you want a shortcut to — not just file types — define an alias and pass it as the first argument, with the target(s) after it:
+
+```yaml
+aliases:
+  ide:
+    app: "Visual Studio Code"
+```
+
+```bash
+opener ide .             # opens . with the app configured for "ide"
+```
+
+Aliases work with CLI commands too (`command: "nvim"`), and can take multiple targets: `opener editor a.md b.md`. An alias that isn't in your config is an error:
 
 ```bash
 $ opener foo .
