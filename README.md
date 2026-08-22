@@ -2,14 +2,7 @@
 
 `opener` is a small macOS CLI that gives you one interface for opening files, directories, and applications — hiding the differences between specific macOS apps behind a layer of aliases and user configuration.
 
-```bash
-opener <target>
-opener <alias> <target>
-```
-
-`opener` doesn't implement its own file-opening mechanism. It's a thin wrapper around macOS's native `open` command and Launch Services, plus a configurable layer of aliases on top.
-
-## Install
+## Installation
 
 ```bash
 go install github.com/inchestnov/opener/cmd/opener@latest
@@ -44,9 +37,15 @@ opener ~/go/projects/opener  # Open directory in Finder
 opener https://github.com    # Open URL in default browser
 ```
 
-A target that doesn't exist and isn't a URL is an error, and so is an executable file — `opener` won't guess at running it for you; use `./script.sh` directly.
+> [!TIP]
+> Typing `opener` in full gets old fast — add a shell alias:
+>
+> ```bash
+> alias o="opener"
+> o docs.pdf
+> ```
 
-### Configuration
+## Configuration
 
 `opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, existing files, directories, and URLs fall back to the system `open <target>`.
 
@@ -97,8 +96,6 @@ open:
 opener ~/go/projects/opener   # opens in Visual Studio Code instead of Finder
 ```
 
-Same `app`/`cmd` forms as a pattern rule, but a bare executable for `cmd` (run directly via `exec.Command`, never through a shell) rather than a whole command line.
-
 #### `aliases` — named shortcuts for `opener <alias> <target>...`
 
 Point an alias at a CLI program:
@@ -136,13 +133,13 @@ opener: unknown alias: foo
 
 ```yaml
 templates:
-  payment-service:
-    path: ~/repos/payment-service
-    app: "Visual Studio Code"
+  bashrc:
+    path: ~/.bashrc
+    cmd: vim
 ```
 
 ```bash
-opener payment-service   # opens ~/repos/payment-service in Visual Studio Code
+opener bashrc   # vim ~/.bashrc
 ```
 
 A template is a named shortcut, not a real target: `opener <name>` ignores
@@ -157,19 +154,12 @@ it directly — so a template can just pin *what* opens, and let `open.patterns`
 
 ```yaml
 templates:
-  payment-service:
-    path: ~/repos/payment-service   # a directory -> opens in Finder (or open.directory, if set)
-  invoice:
-    path: ~/Downloads/invoice.pdf   # a file -> matched against open.patterns, same as any .pdf
+  vimrc:
+    path: ~/.vimrc                 # a file -> matched against open.patterns, same as any other file
+  nvim-config:
+    path: ~/.config/nvim           # a directory -> opens in Finder (or open.directory, if set)
 ```
 
 Any combination works: a file pinned to an app, a directory pinned to a CLI
 command, or either left to fall back to whatever automatic mode would
 otherwise do.
-
-Typing `opener` in full gets old fast — add a shell alias:
-
-```bash
-alias o="opener"
-o docs.pdf
-```
