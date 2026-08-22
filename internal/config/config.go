@@ -9,10 +9,10 @@ import (
 )
 
 // Rule describes how to open something: either a macOS GUI application
-// (App) or a CLI executable (Command).
+// (App) or a CLI executable (Cmd).
 type Rule struct {
-	App     string `mapstructure:"app"`
-	Command string `mapstructure:"command"`
+	App string `mapstructure:"app"`
+	Cmd string `mapstructure:"cmd"`
 }
 
 // PatternRule matches a target's filename against Pattern (a glob, e.g.

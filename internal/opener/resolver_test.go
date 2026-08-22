@@ -91,7 +91,7 @@ func TestResolve_AliasApp(t *testing.T) {
 func TestResolve_AliasCommand(t *testing.T) {
 	cfg := &config.Config{
 		Aliases: map[string]config.Rule{
-			"editor": {Command: "nvim"},
+			"editor": {Cmd: "nvim"},
 		},
 	}
 
@@ -113,7 +113,7 @@ func TestResolve_AliasCommand(t *testing.T) {
 func TestResolve_AliasMultipleTargets(t *testing.T) {
 	cfg := &config.Config{
 		Aliases: map[string]config.Rule{
-			"editor": {Command: "nvim"},
+			"editor": {Cmd: "nvim"},
 		},
 	}
 

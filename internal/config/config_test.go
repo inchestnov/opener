@@ -19,7 +19,7 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if len(cfg.Aliases) != 0 {
 		t.Errorf("Aliases = %v, want empty", cfg.Aliases)
 	}
-	if cfg.Open.Directory.App != "" || cfg.Open.Directory.Command != "" {
+	if cfg.Open.Directory.App != "" || cfg.Open.Directory.Cmd != "" {
 		t.Errorf("Open.Directory = %+v, want zero value", cfg.Open.Directory)
 	}
 	if len(cfg.Open.Patterns) != 0 {
@@ -34,11 +34,11 @@ aliases:
   ide:
     app: "Visual Studio Code"
   editor:
-    command: "nvim"
+    cmd: "nvim"
 
 open:
   directory:
-    command: "open"
+    cmd: "open"
   patterns:
     - pattern: "*.pdf"
       app: "Google Chrome"
@@ -54,11 +54,11 @@ open:
 	if got, want := cfg.Aliases["ide"].App, "Visual Studio Code"; got != want {
 		t.Errorf("Aliases[ide].App = %q, want %q", got, want)
 	}
-	if got, want := cfg.Aliases["editor"].Command, "nvim"; got != want {
-		t.Errorf("Aliases[editor].Command = %q, want %q", got, want)
+	if got, want := cfg.Aliases["editor"].Cmd, "nvim"; got != want {
+		t.Errorf("Aliases[editor].Cmd = %q, want %q", got, want)
 	}
-	if got, want := cfg.Open.Directory.Command, "open"; got != want {
-		t.Errorf("Open.Directory.Command = %q, want %q", got, want)
+	if got, want := cfg.Open.Directory.Cmd, "open"; got != want {
+		t.Errorf("Open.Directory.Cmd = %q, want %q", got, want)
 	}
 	if len(cfg.Open.Patterns) != 2 {
 		t.Fatalf("Open.Patterns = %v, want 2 entries", cfg.Open.Patterns)

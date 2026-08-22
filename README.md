@@ -46,7 +46,7 @@ That's overridable via `~/.opener.yaml`. Give a target a named alias, and point 
 # ~/.opener.yaml
 aliases:
   ide:
-    command: nvim
+    cmd: nvim
 ```
 
 ```bash
@@ -84,19 +84,19 @@ o docs.pdf
 
 `opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, everything falls back to the system `open <target>`.
 
-### `command` — run a CLI program directly
+### `cmd` — run a CLI program directly
 
 ```yaml
 aliases:
   editor:
-    command: nvim
+    cmd: nvim
 ```
 
 ```bash
 opener editor README.md   # nvim README.md
 ```
 
-Targets are appended as-is; `command` is run directly via `exec.Command`, never through a shell.
+Targets are appended as-is; `cmd` here is a bare executable, run directly via `exec.Command`, never through a shell.
 
 ### `app` — open in a macOS application
 
@@ -134,7 +134,7 @@ open:
       app: "Preview"
 ```
 
-### `cmd` — a full command line for pattern rules
+### `cmd` for pattern rules — a full command line
 
 ```yaml
 open:
@@ -143,7 +143,7 @@ open:
       cmd: "open -a 'Google Chrome'"
 ```
 
-Like `command`, but for a whole command line rather than a bare executable — useful when you need fixed flags baked in. `cmd` is split into words the way a shell would (quotes honored), then run directly; no shell is ever invoked. Targets are appended to the end.
+Unlike the alias/`open.directory` form of `cmd` above, this one takes a whole command line rather than a bare executable — useful when you need fixed flags baked in. It's split into words the way a shell would (quotes honored), then run directly; no shell is ever invoked. Targets are appended to the end.
 
 ### `open.directory` — override how directories open
 
@@ -157,4 +157,4 @@ open:
 opener ~/go/projects/opener   # opens in Visual Studio Code instead of Finder
 ```
 
-Same `app`/`command` forms as an alias.
+Same `app`/`cmd` forms as an alias.

@@ -92,9 +92,9 @@ func resolveAutomatic(targets []string, cfg *config.Config, diag diagnostic.Cont
 	case TargetDirectory:
 		logger.Debug("checking config: %s", diag.ConfigPath)
 
-		if rule := cfg.Open.Directory; rule.App != "" || rule.Command != "" {
+		if rule := cfg.Open.Directory; rule.App != "" || rule.Cmd != "" {
 			logger.Debug("config rule found: open.directory")
-			logCommandOrApp(logger, rule.Command, rule.App)
+			logCommandOrApp(logger, rule.Cmd, rule.App)
 			return actionForRule(rule, targets), nil
 		}
 		logger.Debug("no custom directory rule found")
@@ -134,12 +134,12 @@ func logCommandOrApp(logger diagnostic.Logger, command, app string) {
 	logger.Debug("launch strategy: macOS application")
 }
 
-// logAliasRuleChoice logs which of a Rule's App/Command forms will be used
+// logAliasRuleChoice logs which of a Rule's App/Cmd forms will be used
 // for an alias-mode rule.
 func logAliasRuleChoice(logger diagnostic.Logger, rule config.Rule) {
-	if rule.Command != "" {
+	if rule.Cmd != "" {
 		logger.Debug("alias type: command")
-		logger.Debug("executable: %s", rule.Command)
+		logger.Debug("executable: %s", rule.Cmd)
 		return
 	}
 	logger.Debug("alias type: application")
@@ -147,10 +147,10 @@ func logAliasRuleChoice(logger diagnostic.Logger, rule config.Rule) {
 }
 
 // actionForRule builds the Action for a config.Rule against targets.
-// Command takes precedence when both App and Command are set.
+// Cmd takes precedence when both App and Cmd are set.
 func actionForRule(rule config.Rule, targets []string) Action {
-	if rule.Command != "" {
-		return Action{Strategy: StrategyCommand, Name: rule.Command, Args: targets}
+	if rule.Cmd != "" {
+		return Action{Strategy: StrategyCommand, Name: rule.Cmd, Args: targets}
 	}
 	return Action{Strategy: StrategyApp, Name: rule.App, Args: targets}
 }
