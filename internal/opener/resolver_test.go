@@ -29,7 +29,7 @@ func TestResolve_FallbackForUnruledTargets(t *testing.T) {
 	}{
 		{"existing file with no rule", file},
 		{"existing directory", subdir},
-		{"nonexistent path / URL", "https://github.com"},
+		{"url", "https://github.com"},
 	}
 
 	for _, tt := range tests {
@@ -45,6 +45,30 @@ func TestResolve_FallbackForUnruledTargets(t *testing.T) {
 				t.Errorf("Args = %v, want [%q]", action.Args, tt.target)
 			}
 		})
+	}
+}
+
+func TestResolve_UnresolvableTargetIsError(t *testing.T) {
+	cfg := &config.Config{}
+
+	_, err := Resolve("", []string{filepath.Join(t.TempDir(), "missing")}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err == nil {
+		t.Fatal("Resolve() error = nil, want error for a target that doesn't exist and isn't a URL")
+	}
+}
+
+func TestResolve_ExecutableTargetIsError(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "run.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh"), 0o700); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{}
+
+	_, err := Resolve("", []string{script}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err == nil {
+		t.Fatal("Resolve() error = nil, want error for an executable target")
 	}
 }
 

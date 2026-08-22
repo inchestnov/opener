@@ -38,7 +38,10 @@ Out of the box, `opener` just uses the system default:
 ```bash
 opener docs.pdf              # Open using default app
 opener ~/go/projects/opener  # Open directory in Finder
+opener https://github.com    # Open URL in default browser
 ```
+
+A target that doesn't exist and isn't a URL is an error, and so is an executable file — `opener` won't guess at running it for you; use `./script.sh` directly.
 
 That's overridable via `~/.opener.yaml`. Give a target a named alias, and point the alias at a CLI program:
 
@@ -82,7 +85,7 @@ o docs.pdf
 
 ## Configuration
 
-`opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, everything falls back to the system `open <target>`.
+`opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, existing files, directories, and URLs fall back to the system `open <target>`.
 
 ### `cmd` — run a CLI program directly
 

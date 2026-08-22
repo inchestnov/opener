@@ -38,8 +38,9 @@ type Action struct {
 // alias is empty for automatic mode ("opener <target>"), where targets
 // holds exactly one element. If that target is a file matching a pattern
 // under cfg.Open.Patterns (checked in order, first match wins), that rule
-// is used. A directory target uses cfg.Open.Directory if set. Otherwise
-// resolution falls back to the system `open` command.
+// is used. A directory target uses cfg.Open.Directory if set. A URL target
+// falls back to the system `open` command. An executable file, or a target
+// that cannot be resolved at all, is an error.
 //
 // alias is non-empty for alias mode ("opener <alias> <target>..."), where
 // it is looked up in cfg.Aliases and launched as either a macOS application
@@ -99,6 +100,17 @@ func resolveAutomatic(targets []string, cfg *config.Config, diag diagnostic.Cont
 		}
 		logger.Debug("no custom directory rule found")
 		logger.Debug("using default application: Finder")
+
+	case TargetExecutable:
+		logger.Debug("refusing to open executable file")
+		return Action{}, fmt.Errorf("%s is executable; run it directly instead of opening it", target)
+
+	case TargetURL:
+		logger.Debug("target is a URL")
+
+	default:
+		logger.Debug("target does not exist and is not a URL")
+		return Action{}, fmt.Errorf("cannot resolve target: %s", target)
 	}
 
 	return Action{Strategy: StrategyFallback, Args: targets}, nil
