@@ -12,6 +12,16 @@ opener <alias> <target>
 ## Install
 
 ```bash
+go install github.com/inchestnov/opener/cmd/opener@latest
+```
+
+This puts `opener` in `$(go env GOPATH)/bin` — make sure that's on your `PATH`.
+
+### Building locally instead
+
+If you're working on `opener` itself, build from a checkout of this repo:
+
+```bash
 make build      # builds ./bin/opener
 ```
 
