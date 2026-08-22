@@ -18,12 +18,12 @@ const version = "0.1.0"
 // NewRootCmd builds opener's root cobra command.
 func NewRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "opener <target>",
+		Use:     "opener <target> | opener <alias> <target>...",
 		Short:   "opener is a macOS CLI wrapper around the native `open` mechanism, extended with aliases and configuration.",
 		Version: version,
-		Args:    cobra.ExactArgs(1),
+		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return run(args[0])
+			return run(args)
 		},
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -37,7 +37,16 @@ func NewRootCmd() *cobra.Command {
 	return cmd
 }
 
-func run(target string) error {
+// run interprets args per REQ.md's argument-count rule: a single argument
+// is a target for automatic mode; two or more are an alias followed by its
+// target(s).
+func run(args []string) error {
+	var alias string
+	targets := args
+	if len(args) >= 2 {
+		alias, targets = args[0], args[1:]
+	}
+
 	configPath, err := defaultConfigPath()
 	if err != nil {
 		return err
@@ -48,7 +57,7 @@ func run(target string) error {
 		return fmt.Errorf("loading config %s: %w", configPath, err)
 	}
 
-	action, err := opener.Resolve(target, cfg)
+	action, err := opener.Resolve(alias, targets, cfg)
 	if err != nil {
 		return err
 	}
