@@ -1,0 +1,12 @@
+/opener
+/bin/
+/dist/
+*.test
+*.out
+.DS_Store
+
+# Local tooling (CodeGraph, MCP, plugin/skill config) — not part of the project
+/.claude/
+/.codegraph/
+/.mcp.json
+/skills-lock.json
