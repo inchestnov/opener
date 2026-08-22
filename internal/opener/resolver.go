@@ -4,6 +4,8 @@ package opener
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/inchestnov/opener/internal/config"
 )
@@ -32,18 +34,23 @@ type Action struct {
 // Resolve decides how to launch targets, given the user's config.
 //
 // alias is empty for automatic mode ("opener <target>"), where targets
-// holds exactly one element and resolution falls back to the system `open`
-// command in the absence of a matching rule.
+// holds exactly one element. If that target is a file whose extension has
+// a matching rule under cfg.Open.Files, that rule is used; otherwise
+// resolution falls back to the system `open` command.
 //
 // alias is non-empty for alias mode ("opener <alias> <target>..."), where
 // it is looked up in cfg.Aliases and launched as either a macOS application
 // or a CLI command; an alias not present in cfg.Aliases is an error.
 func Resolve(alias string, targets []string, cfg *config.Config) (Action, error) {
 	if alias == "" {
-		return Action{
-			Strategy: StrategyFallback,
-			Args:     targets,
-		}, nil
+		target := targets[0]
+		if resolveTargetType(target) == TargetFile {
+			ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(target), "."))
+			if rule, ok := cfg.Open.Files[ext]; ok {
+				return actionForRule(rule, targets), nil
+			}
+		}
+		return Action{Strategy: StrategyFallback, Args: targets}, nil
 	}
 
 	rule, ok := cfg.Aliases[alias]

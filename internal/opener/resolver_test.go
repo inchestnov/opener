@@ -118,3 +118,130 @@ func TestResolve_UnknownAlias(t *testing.T) {
 		t.Errorf("error = %q, want %q", got, want)
 	}
 }
+
+func TestResolve_PDFRuleOverride(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "document.pdf")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{
+		Open: config.OpenConfig{
+			Files: map[string]config.Rule{
+				"pdf": {App: "Google Chrome"},
+			},
+		},
+	}
+
+	action, err := Resolve("", []string{file}, cfg)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyApp {
+		t.Errorf("Strategy = %v, want StrategyApp", action.Strategy)
+	}
+	if action.Name != "Google Chrome" {
+		t.Errorf("Name = %q, want %q", action.Name, "Google Chrome")
+	}
+	if len(action.Args) != 1 || action.Args[0] != file {
+		t.Errorf("Args = %v, want [%q]", action.Args, file)
+	}
+}
+
+func TestResolve_PDFRuleOverrideCaseInsensitiveExtension(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "document.PDF")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{
+		Open: config.OpenConfig{
+			Files: map[string]config.Rule{
+				"pdf": {App: "Safari"},
+			},
+		},
+	}
+
+	action, err := Resolve("", []string{file}, cfg)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyApp || action.Name != "Safari" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyApp Safari", action.Strategy, action.Name)
+	}
+}
+
+func TestResolve_PDFCommandRuleOverride(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "document.pdf")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{
+		Open: config.OpenConfig{
+			Files: map[string]config.Rule{
+				"pdf": {Command: "qpdfview"},
+			},
+		},
+	}
+
+	action, err := Resolve("", []string{file}, cfg)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyCommand || action.Name != "qpdfview" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyCommand qpdfview", action.Strategy, action.Name)
+	}
+}
+
+func TestResolve_PDFWithoutRuleFallsBack(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "document.pdf")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{}
+
+	action, err := Resolve("", []string{file}, cfg)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyFallback {
+		t.Errorf("Strategy = %v, want StrategyFallback", action.Strategy)
+	}
+	if len(action.Args) != 1 || action.Args[0] != file {
+		t.Errorf("Args = %v, want [%q]", action.Args, file)
+	}
+}
+
+// File-type rule matching isn't hardcoded to pdf: it looks up whatever
+// extension key is present under open.files, so any configured extension
+// (not just pdf) resolves the same way.
+func TestResolve_NonPDFExtensionRuleOverride(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "notes.md")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write test fixture: %v", err)
+	}
+
+	cfg := &config.Config{
+		Open: config.OpenConfig{
+			Files: map[string]config.Rule{
+				"pdf": {App: "Google Chrome"},
+				"md":  {Command: "nvim"},
+			},
+		},
+	}
+
+	action, err := Resolve("", []string{file}, cfg)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyCommand || action.Name != "nvim" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyCommand nvim", action.Strategy, action.Name)
+	}
+}
