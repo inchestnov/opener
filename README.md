@@ -33,21 +33,77 @@ go build -o bin/opener ./cmd/opener
 
 ## Usage
 
-```bash
-opener <target>
-```
-
-A single argument opens `target`: `opener` figures out whether it's a file, a directory, or something else (a URL, a nonexistent path) and opens it accordingly.
+Out of the box, `opener` just uses the system default:
 
 ```bash
-opener document.pdf     # opens via the configured PDF rule, or the default app
-opener .                # opens the current directory in Finder
-opener ~/Downloads      # opens a directory in Finder
-opener image.png        # no special rule -> system `open`, Launch Services decides
-opener https://github.com   # not a local path -> passed straight to `open`
+opener docs.pdf              # Open using default app
+opener ~/go/projects/opener  # Open directory in Finder
 ```
 
-Override how a file type opens via `~/.opener.yaml`, matching a glob pattern against the filename:
+That's overridable via `~/.opener.yaml`. Give a target a named alias, and point the alias at a CLI program:
+
+```yaml
+# ~/.opener.yaml
+aliases:
+  ide:
+    command: nvim
+```
+
+```bash
+opener ide ~/go/projects/opener   # nvim ~/go/projects/opener
+```
+
+or at a macOS application:
+
+```yaml
+# ~/.opener.yaml
+aliases:
+  ide:
+    app: "Visual Studio Code"
+```
+
+```bash
+opener ide ~/go/projects/opener   # opens in Visual Studio Code
+```
+
+An alias that isn't in your config is an error:
+
+```bash
+$ opener foo .
+opener: unknown alias: foo
+```
+
+## Configuration
+
+`opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, everything falls back to the system `open <target>`.
+
+### `command` — run a CLI program directly
+
+```yaml
+aliases:
+  editor:
+    command: nvim
+```
+
+```bash
+opener editor README.md   # nvim README.md
+```
+
+Targets are appended as-is; `command` is run directly via `exec.Command`, never through a shell.
+
+### `app` — open in a macOS application
+
+```yaml
+aliases:
+  browser:
+    app: "Google Chrome"
+```
+
+```bash
+opener browser https://github.com   # open -a "Google Chrome" https://github.com
+```
+
+### `pattern` — match files by extension or glob
 
 ```yaml
 open:
@@ -57,10 +113,12 @@ open:
 ```
 
 ```bash
-opener document.pdf     # now opens in Chrome instead of the default app
+opener document.pdf   # now opens in Chrome instead of the default app
 ```
 
-`pattern` can also be a full command line instead of an app name, via `cmd` (word-split, never run through a shell):
+`pattern` can be a glob (`*.pdf`) or a bare extension (`.pdf`, treated the same as `*.pdf`), matched case-insensitively against the filename. Patterns are checked in order; the first match wins.
+
+### `cmd` — a full command line for pattern rules
 
 ```yaml
 open:
@@ -69,23 +127,18 @@ open:
       cmd: "open -a 'Google Chrome'"
 ```
 
-Patterns are checked in order; the first match wins.
+Like `command`, but for a whole command line rather than a bare executable — useful when you need fixed flags baked in. `cmd` is split into words the way a shell would (quotes honored), then run directly; no shell is ever invoked. Targets are appended to the end.
 
-For anything you want a shortcut to — not just file types — define an alias and pass it as the first argument, with the target(s) after it:
+### `open.directory` — override how directories open
 
 ```yaml
-aliases:
-  ide:
+open:
+  directory:
     app: "Visual Studio Code"
 ```
 
 ```bash
-opener ide .             # opens . with the app configured for "ide"
+opener ~/go/projects/opener   # opens in Visual Studio Code instead of Finder
 ```
 
-Aliases work with CLI commands too (`command: "nvim"`), and can take multiple targets: `opener editor a.md b.md`. An alias that isn't in your config is an error:
-
-```bash
-$ opener foo .
-opener: unknown alias: foo
-```
+Same `app`/`command` forms as an alias.
