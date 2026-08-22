@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/inchestnov/opener/internal/config"
+	"github.com/inchestnov/opener/internal/diagnostic"
 )
 
 func TestResolve_FallbackForUnruledTargets(t *testing.T) {
@@ -33,7 +34,7 @@ func TestResolve_FallbackForUnruledTargets(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			action, err := Resolve("", []string{tt.target}, cfg)
+			action, err := Resolve("", []string{tt.target}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 			if err != nil {
 				t.Fatalf("Resolve(%q) error = %v, want nil", tt.target, err)
 			}
@@ -47,6 +48,24 @@ func TestResolve_FallbackForUnruledTargets(t *testing.T) {
 	}
 }
 
+func TestResolve_DirectoryRuleOverride(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg := &config.Config{
+		Open: config.OpenConfig{
+			Directory: config.Rule{App: "Visual Studio Code"},
+		},
+	}
+
+	action, err := Resolve("", []string{dir}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if action.Strategy != StrategyApp || action.Name != "Visual Studio Code" {
+		t.Errorf("got Strategy=%v Name=%q, want StrategyApp %q", action.Strategy, action.Name, "Visual Studio Code")
+	}
+}
+
 func TestResolve_AliasApp(t *testing.T) {
 	cfg := &config.Config{
 		Aliases: map[string]config.Rule{
@@ -54,7 +73,7 @@ func TestResolve_AliasApp(t *testing.T) {
 		},
 	}
 
-	action, err := Resolve("ide", []string{"."}, cfg)
+	action, err := Resolve("ide", []string{"."}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}
@@ -76,7 +95,7 @@ func TestResolve_AliasCommand(t *testing.T) {
 		},
 	}
 
-	action, err := Resolve("editor", []string{"README.md"}, cfg)
+	action, err := Resolve("editor", []string{"README.md"}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}
@@ -98,7 +117,7 @@ func TestResolve_AliasMultipleTargets(t *testing.T) {
 		},
 	}
 
-	action, err := Resolve("editor", []string{"a.md", "b.md"}, cfg)
+	action, err := Resolve("editor", []string{"a.md", "b.md"}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}
@@ -110,7 +129,7 @@ func TestResolve_AliasMultipleTargets(t *testing.T) {
 func TestResolve_UnknownAlias(t *testing.T) {
 	cfg := &config.Config{}
 
-	_, err := Resolve("foo", []string{"."}, cfg)
+	_, err := Resolve("foo", []string{"."}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err == nil {
 		t.Fatal("Resolve() error = nil, want error for unknown alias")
 	}
@@ -134,7 +153,7 @@ func TestResolve_PDFRuleOverride(t *testing.T) {
 		},
 	}
 
-	action, err := Resolve("", []string{file}, cfg)
+	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}
@@ -164,7 +183,7 @@ func TestResolve_PDFRuleOverrideCaseInsensitiveExtension(t *testing.T) {
 		},
 	}
 
-	action, err := Resolve("", []string{file}, cfg)
+	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}
@@ -188,7 +207,7 @@ func TestResolve_PDFCommandRuleOverride(t *testing.T) {
 		},
 	}
 
-	action, err := Resolve("", []string{file}, cfg)
+	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}
@@ -206,7 +225,7 @@ func TestResolve_PDFWithoutRuleFallsBack(t *testing.T) {
 
 	cfg := &config.Config{}
 
-	action, err := Resolve("", []string{file}, cfg)
+	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}
@@ -237,7 +256,7 @@ func TestResolve_NonPDFExtensionRuleOverride(t *testing.T) {
 		},
 	}
 
-	action, err := Resolve("", []string{file}, cfg)
+	action, err := Resolve("", []string{file}, cfg, diagnostic.Context{Logger: diagnostic.Noop})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v, want nil", err)
 	}

@@ -11,6 +11,18 @@ const (
 	TargetDirectory
 )
 
+// String renders t for diagnostic output.
+func (t TargetType) String() string {
+	switch t {
+	case TargetFile:
+		return "file"
+	case TargetDirectory:
+		return "directory"
+	default:
+		return "unknown"
+	}
+}
+
 // resolveTargetType classifies target by stat-ing it. A target that cannot
 // be stat-ed (a URL, a nonexistent path) is TargetUnknown and is left to the
 // system open command to interpret.
