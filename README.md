@@ -50,7 +50,8 @@ opener https://github.com    # Open URL in default browser
 `opener` generates completion scripts via `opener completion <shell>`. A bare
 `opener <TAB>` completes files; once you start typing, matching alias and
 template names from your config are offered, falling back to files when none
-match.
+match. After an alias, its targets complete according to that alias's
+`complete:` setting (see Configuration below).
 
 ```bash
 # zsh — add to a directory on your $fpath, e.g.
@@ -150,6 +151,40 @@ An alias that isn't in your config is an error:
 $ opener foo .
 opener: unknown alias: foo
 ```
+
+##### `complete` — narrow an alias's tab-completion
+
+An alias can say what kind of target it takes, so `opener <alias> <TAB>`
+offers only relevant candidates (this only affects completion — it never
+rejects a target at open time):
+
+```yaml
+aliases:
+  code:
+    app: "Visual Studio Code"
+    complete: git-dirs          # only directories that contain a .git
+  show:
+    app: "Finder"
+    complete: dirs              # any directory
+  edit:
+    cmd: nvim
+    complete: files
+    extensions: [go, md, txt]  # only files with these extensions
+  web:
+    app: "Google Chrome"
+    complete: urls
+    urls:                      # offered first; falls back to files
+      - https://github.com
+      - https://news.ycombinator.com
+```
+
+| `complete:` | completes |
+| --- | --- |
+| _(unset)_ / `any` | files and directories |
+| `files` | files, narrowed to `extensions:` if given |
+| `dirs` | directories |
+| `git-dirs` | directories one level down that directly contain a `.git` entry |
+| `urls` | the `urls:` list (prefix-matched), then files |
 
 #### `templates` — a link to a fixed file or project
 

@@ -10,9 +10,18 @@ import (
 
 // Rule describes how to open something: either a macOS GUI application
 // (App) or a CLI executable (Cmd).
+//
+// On an alias, Complete additionally steers shell completion of that
+// alias's targets: "" / "any" (files and directories), "files" (optionally
+// narrowed to Extensions), "dirs", "git-dirs" (directories containing a
+// .git entry), or "urls" (offer URLs, then fall back to files). Complete,
+// Extensions, and URLs are ignored outside alias rules.
 type Rule struct {
-	App string `mapstructure:"app"`
-	Cmd string `mapstructure:"cmd"`
+	App        string   `mapstructure:"app"`
+	Cmd        string   `mapstructure:"cmd"`
+	Complete   string   `mapstructure:"complete"`
+	Extensions []string `mapstructure:"extensions"`
+	URLs       []string `mapstructure:"urls"`
 }
 
 // PatternRule matches a target's filename against Pattern (a glob, e.g.

@@ -48,23 +48,26 @@ func NewRootCmd() *cobra.Command {
 	return cmd
 }
 
-// completeArg powers shell completion. The first positional argument is
-// usually a file, so a bare completion request (nothing typed yet) is left
-// to the shell's file completion. Once the user starts typing, alias and
-// template names from ~/.opener.yaml that share that prefix are offered;
-// when none match, the shell still falls back to files. Any later argument
-// is a plain target -> file completion.
+// completeArg powers shell completion.
+//
+// The first positional argument is usually a file, so a bare request
+// (nothing typed) is left to the shell's file completion; once a prefix is
+// typed, alias and template names from ~/.opener.yaml sharing it are
+// offered, still falling back to files when none match.
+//
+// Once an alias is in place ("opener <alias> <target>..."), its targets are
+// completed according to that alias's `complete:` setting.
 func completeArg(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 || toComplete == "" {
+	cfg := completionConfig()
+
+	if len(args) >= 1 {
+		if rule, ok := cfg.Aliases[args[0]]; ok {
+			return completeAliasTarget(rule, toComplete)
+		}
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	configPath, err := defaultConfigPath()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveDefault
-	}
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
+	if toComplete == "" {
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
@@ -84,6 +87,116 @@ func completeArg(_ *cobra.Command, args []string, toComplete string) ([]string, 
 	// ShellCompDirectiveDefault (not NoFileComp): if nothing here matches,
 	// the shell still completes file paths.
 	return names, cobra.ShellCompDirectiveDefault
+}
+
+// completionConfig loads the config for completion, treating any problem as
+// an empty config so completion degrades to plain file paths.
+func completionConfig() *config.Config {
+	path, err := defaultConfigPath()
+	if err != nil {
+		return &config.Config{}
+	}
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		return &config.Config{}
+	}
+	return cfg
+}
+
+// completeAliasTarget completes one target for an alias per its `complete:`
+// setting.
+func completeAliasTarget(rule config.Rule, toComplete string) ([]string, cobra.ShellCompDirective) {
+	switch rule.Complete {
+	case "dirs":
+		return nil, cobra.ShellCompDirectiveFilterDirs
+
+	case "git-dirs":
+		return completeGitDirs(toComplete)
+
+	case "files":
+		if exts := normalizeExtensions(rule.Extensions); len(exts) > 0 {
+			return exts, cobra.ShellCompDirectiveFilterFileExt
+		}
+		return nil, cobra.ShellCompDirectiveDefault
+
+	case "urls":
+		var urls []string
+		for _, u := range rule.URLs {
+			if strings.HasPrefix(u, toComplete) {
+				urls = append(urls, u)
+			}
+		}
+		sort.Strings(urls)
+		// When the prefix matches no URL, the shell falls back to files.
+		return urls, cobra.ShellCompDirectiveDefault
+
+	default: // "", "any"
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+}
+
+// normalizeExtensions strips a leading dot from each extension, as cobra's
+// file-extension filter expects bare extensions ("go", not ".go").
+func normalizeExtensions(exts []string) []string {
+	if len(exts) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(exts))
+	for _, e := range exts {
+		if e = strings.TrimPrefix(strings.TrimSpace(e), "."); e != "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// completeGitDirs offers directories one path segment deep from what's been
+// typed that directly contain a .git entry.
+func completeGitDirs(toComplete string) ([]string, cobra.ShellCompDirective) {
+	const stop = cobra.ShellCompDirectiveNoSpace | cobra.ShellCompDirectiveNoFileComp
+
+	typedDir, prefix := splitPath(toComplete)
+	scanDir := expandUser(typedDir)
+	if scanDir == "" {
+		scanDir = "."
+	}
+
+	entries, err := os.ReadDir(scanDir)
+	if err != nil {
+		return nil, stop
+	}
+
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(scanDir, e.Name(), ".git")); err != nil {
+			continue
+		}
+		out = append(out, typedDir+e.Name()+"/")
+	}
+	sort.Strings(out)
+	return out, stop
+}
+
+// splitPath splits s at its last slash into the directory portion (with the
+// trailing slash kept, or empty) and the remaining filename prefix.
+func splitPath(s string) (dir, prefix string) {
+	if i := strings.LastIndexByte(s, '/'); i >= 0 {
+		return s[:i+1], s[i+1:]
+	}
+	return "", s
+}
+
+// expandUser resolves a leading ~ or ~/ against the home directory.
+func expandUser(p string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home + strings.TrimPrefix(p, "~")
+		}
+	}
+	return p
 }
 
 // run interprets args per REQ.md's argument-count rule: a single argument

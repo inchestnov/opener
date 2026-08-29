@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -36,8 +37,16 @@ func TestLoadConfig_ValidFile(t *testing.T) {
 aliases:
   ide:
     app: "Visual Studio Code"
+    complete: git-dirs
   editor:
     cmd: "nvim"
+    complete: files
+    extensions: [go, md]
+  web:
+    app: "Google Chrome"
+    complete: urls
+    urls:
+      - https://github.com
 
 templates:
   payment-service:
@@ -64,6 +73,15 @@ open:
 	}
 	if got, want := cfg.Aliases["editor"].Cmd, "nvim"; got != want {
 		t.Errorf("Aliases[editor].Cmd = %q, want %q", got, want)
+	}
+	if got, want := cfg.Aliases["ide"].Complete, "git-dirs"; got != want {
+		t.Errorf("Aliases[ide].Complete = %q, want %q", got, want)
+	}
+	if got, want := cfg.Aliases["editor"].Extensions, []string{"go", "md"}; !slices.Equal(got, want) {
+		t.Errorf("Aliases[editor].Extensions = %v, want %v", got, want)
+	}
+	if got, want := cfg.Aliases["web"].URLs, []string{"https://github.com"}; !slices.Equal(got, want) {
+		t.Errorf("Aliases[web].URLs = %v, want %v", got, want)
 	}
 	if got, want := cfg.Templates["payment-service"], (Template{Path: "/repos/payment-service", App: "Visual Studio Code"}); got != want {
 		t.Errorf("Templates[payment-service] = %+v, want %+v", got, want)
