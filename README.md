@@ -45,6 +45,28 @@ opener https://github.com    # Open URL in default browser
 > o docs.pdf
 > ```
 
+### Shell completion
+
+`opener` generates completion scripts via `opener completion <shell>`. A bare
+`opener <TAB>` completes files; once you start typing, matching alias and
+template names from your config are offered, falling back to files when none
+match.
+
+```bash
+# zsh — add to a directory on your $fpath, e.g.
+opener completion zsh > "${fpath[1]}/_opener"
+
+# bash
+opener completion bash > /opt/homebrew/etc/bash_completion.d/opener
+
+# fish
+opener completion fish > ~/.config/fish/completions/opener.fish
+```
+
+Run `opener completion <shell> --help` for per-shell details. If you aliased
+`opener` to `o`, tell the shell the alias inherits the completion — zsh:
+`compdef o=opener`.
+
 ## Configuration
 
 `opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, existing files, directories, and URLs fall back to the system `open <target>`.

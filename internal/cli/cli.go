@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -32,8 +34,9 @@ func NewRootCmd() *cobra.Command {
 			verbose, _ := cmd.Flags().GetBool("verbose")
 			return run(args, Options{Verbose: verbose})
 		},
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		SilenceErrors:     true,
+		SilenceUsage:      true,
+		ValidArgsFunction: completeArg,
 	}
 
 	// Register --version without a shorthand ourselves, since cobra's
@@ -43,6 +46,44 @@ func NewRootCmd() *cobra.Command {
 	cmd.Flags().BoolP("verbose", "v", false, "print the resolution decision trail to stderr")
 
 	return cmd
+}
+
+// completeArg powers shell completion. The first positional argument is
+// usually a file, so a bare completion request (nothing typed yet) is left
+// to the shell's file completion. Once the user starts typing, alias and
+// template names from ~/.opener.yaml that share that prefix are offered;
+// when none match, the shell still falls back to files. Any later argument
+// is a plain target -> file completion.
+func completeArg(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 || toComplete == "" {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+
+	configPath, err := defaultConfigPath()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveDefault
+	}
+
+	var names []string
+	for name := range cfg.Aliases {
+		if strings.HasPrefix(name, toComplete) {
+			names = append(names, name+"\talias")
+		}
+	}
+	for name := range cfg.Templates {
+		if strings.HasPrefix(name, toComplete) {
+			names = append(names, name+"\ttemplate")
+		}
+	}
+	sort.Strings(names)
+
+	// ShellCompDirectiveDefault (not NoFileComp): if nothing here matches,
+	// the shell still completes file paths.
+	return names, cobra.ShellCompDirectiveDefault
 }
 
 // run interprets args per REQ.md's argument-count rule: a single argument
