@@ -14,6 +14,7 @@ import (
 func TestCompleteArg(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("OPENER_COMPLETE", "")
 
 	const cfg = `
 aliases:
@@ -82,6 +83,44 @@ templates:
 			}
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("completeArg(%q, %q) = %q, want %q", tt.args, tt.toComplete, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCompleteArgFirstArgModes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.WriteFile(filepath.Join(home, ".opener.yaml"), []byte("aliases:\n  code: {app: X}\n  web: {app: Y}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	allNames := []string{"code\talias", "web\talias"}
+
+	tests := []struct {
+		env           string
+		toComplete    string
+		want          []string
+		wantDirective cobra.ShellCompDirective
+	}{
+		{env: "", toComplete: "", want: nil, wantDirective: cobra.ShellCompDirectiveDefault},
+		{env: "files", toComplete: "", want: nil, wantDirective: cobra.ShellCompDirectiveDefault},
+		{env: "", toComplete: "c", want: []string{"code\talias"}, wantDirective: cobra.ShellCompDirectiveDefault},
+		{env: "names", toComplete: "", want: allNames, wantDirective: cobra.ShellCompDirectiveDefault},
+		{env: "names", toComplete: "zzz", want: nil, wantDirective: cobra.ShellCompDirectiveDefault},
+		{env: "names-only", toComplete: "", want: allNames, wantDirective: cobra.ShellCompDirectiveNoFileComp},
+		{env: "names-only", toComplete: "zzz", want: nil, wantDirective: cobra.ShellCompDirectiveNoFileComp},
+		{env: "garbage", toComplete: "", want: nil, wantDirective: cobra.ShellCompDirectiveDefault},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.env+"/"+tt.toComplete, func(t *testing.T) {
+			t.Setenv("OPENER_COMPLETE", tt.env)
+			got, directive := completeArg(nil, nil, tt.toComplete)
+			if directive != tt.wantDirective {
+				t.Errorf("directive = %v, want %v", directive, tt.wantDirective)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("completeArg(nil, %q) = %q, want %q", tt.toComplete, got, tt.want)
 			}
 		})
 	}

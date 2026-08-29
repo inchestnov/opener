@@ -48,15 +48,40 @@ func NewRootCmd() *cobra.Command {
 	return cmd
 }
 
+// completeMode is how the first positional argument is completed. It is
+// selected by the OPENER_COMPLETE environment variable.
+type completeMode int
+
+const (
+	// filesFirst: a bare request completes files; alias/template names are
+	// offered only once a matching prefix is typed, still falling back to
+	// files. The default.
+	filesFirst completeMode = iota
+	// namesFirst: a bare request lists alias/template names; files take over
+	// once the typed prefix matches no name.
+	namesFirst
+	// namesOnly: only ever complete alias/template names, never files.
+	namesOnly
+)
+
+// firstArgMode reads OPENER_COMPLETE. Unrecognised values (including "files"
+// and "") mean filesFirst.
+func firstArgMode() completeMode {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("OPENER_COMPLETE"))) {
+	case "names":
+		return namesFirst
+	case "names-only", "namesonly":
+		return namesOnly
+	default:
+		return filesFirst
+	}
+}
+
 // completeArg powers shell completion.
 //
-// The first positional argument is usually a file, so a bare request
-// (nothing typed) is left to the shell's file completion; once a prefix is
-// typed, alias and template names from ~/.opener.yaml sharing it are
-// offered, still falling back to files when none match.
-//
-// Once an alias is in place ("opener <alias> <target>..."), its targets are
-// completed according to that alias's `complete:` setting.
+// The first positional argument is completed per OPENER_COMPLETE (see
+// completeMode). Once an alias is in place ("opener <alias> <target>..."),
+// its targets are completed according to that alias's `complete:` setting.
 func completeArg(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := completionConfig()
 
@@ -67,7 +92,8 @@ func completeArg(_ *cobra.Command, args []string, toComplete string) ([]string, 
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	if toComplete == "" {
+	mode := firstArgMode()
+	if toComplete == "" && mode == filesFirst {
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
@@ -84,8 +110,11 @@ func completeArg(_ *cobra.Command, args []string, toComplete string) ([]string, 
 	}
 	sort.Strings(names)
 
-	// ShellCompDirectiveDefault (not NoFileComp): if nothing here matches,
-	// the shell still completes file paths.
+	if mode == namesOnly {
+		return names, cobra.ShellCompDirectiveNoFileComp
+	}
+	// Default (not NoFileComp): when nothing here matches, the shell still
+	// completes file paths.
 	return names, cobra.ShellCompDirectiveDefault
 }
 

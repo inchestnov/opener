@@ -68,6 +68,15 @@ Run `opener completion <shell> --help` for per-shell details. If you aliased
 `opener` to `o`, tell the shell the alias inherits the completion — zsh:
 `compdef o=opener`.
 
+**`OPENER_COMPLETE`** sets what the first argument completes to (a shell can
+only show one or the other, not both at once):
+
+| value | `opener <TAB>` | `opener <prefix><TAB>` |
+| --- | --- | --- |
+| _(unset)_ / `files` | files | matching alias/template names, then files |
+| `names` | all alias/template names | matching names, then files |
+| `names-only` | all names | matching names only, never files |
+
 ## Configuration
 
 `opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, existing files, directories, and URLs fall back to the system `open <target>`.
