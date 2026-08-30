@@ -52,7 +52,7 @@ aliases:
 
   # clone a repo you don't have yet: `opener clone <TAB>` -> owner/name
   clone:
-    cmd: "git clone"                # cmd is shell-word-split; no shell is run
+    cmd: "gh repo clone"           # shell-word-split, no shell; takes owner/name
     source: gh-repos
 
   # a directory in Finder; inline one-off source
