@@ -1,0 +1,56 @@
+# Example ~/.opener.yaml — https://github.com/inchestnov/opener
+#
+# opener runs as:  opener <alias> <target>...
+# An alias says how to open its targets (app or cmd) and, optionally, points
+# at a source that supplies tab-completion candidates. A source is only ever
+# used for completion — at open time whatever you type is passed through
+# verbatim.
+
+sources:
+  # directories under the roots that directly contain a .git entry
+  git-repos:
+    kind: dirs-with
+    roots: ["~/src", "~/work"]
+    marker: .git
+
+  # markdown files under ~/notes (default depth: 2 levels)
+  notes:
+    kind: files
+    roots: ["~/notes"]
+    extensions: [md]
+
+  # a fixed list of paths and/or URLs
+  bookmarks:
+    kind: list
+    items:
+      - https://github.com
+      - https://news.ycombinator.com
+
+  # each line of the command's stdout is a candidate (run via `sh -c`,
+  # 2s timeout — keep it fast, it runs on every <TAB>)
+  gh-repos:
+    kind: command
+    run: "gh repo list --limit 100 --json nameWithOwner -q '.[].nameWithOwner'"
+
+aliases:
+  # replaces the old bare `opener <target>`: `opener open report.pdf`
+  open:
+    cmd: open
+
+  edit:
+    cmd: nvim
+    source:                       # inline source, not shared
+      kind: files
+      extensions: [go, md, txt]
+
+  code:
+    app: "Visual Studio Code"
+    source: git-repos             # reference a named source
+
+  web:
+    app: "Google Chrome"
+    source: bookmarks
+
+  clone:
+    cmd: "git clone"              # cmd is shell-word-split, no shell is run
+    source: gh-repos
