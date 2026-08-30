@@ -1,30 +1,18 @@
 # Example ~/.opener.yaml — https://github.com/inchestnov/opener
 #
 # opener runs as:  opener <alias> <target>...
-# An alias says how to open its targets (app or cmd) and, optionally, points
-# at a source that supplies tab-completion candidates. A source is only ever
-# used for completion — at open time whatever you type is passed through
-# verbatim.
+# An alias says how to open its targets (app or cmd). Its `source`, if any,
+# only supplies <TAB> completion candidates — at open time whatever you type
+# is passed through verbatim.
 
+# ── Reusable source blocks ───────────────────────────────────────────────
+# Define a source once here, then point several aliases at it by name.
 sources:
-  # directories under the roots that directly contain a .git entry
-  git-repos:
+  # directories one level below the roots that contain a .git entry
+  repos:
     kind: dirs-with
     roots: ["~/src", "~/work"]
     marker: .git
-
-  # markdown files under ~/notes (default depth: 2 levels)
-  notes:
-    kind: files
-    roots: ["~/notes"]
-    extensions: [md]
-
-  # a fixed list of paths and/or URLs
-  bookmarks:
-    kind: list
-    items:
-      - https://github.com
-      - https://news.ycombinator.com
 
   # each line of the command's stdout is a candidate (run via `sh -c`,
   # 2s timeout — keep it fast, it runs on every <TAB>)
@@ -32,25 +20,92 @@ sources:
     kind: command
     run: "gh repo list --limit 100 --json nameWithOwner -q '.[].nameWithOwner'"
 
+  # `extensions:` narrows a files source to just those types (case-insensitive,
+  # leading dot optional). Extensionless files (Makefile, LICENSE) and dotfiles
+  # won't match — use a `list` source for those.
+  text-files:
+    kind: files
+    depth: 5
+    extensions: [txt, md, markdown, rst, org, log, tex,
+                 json, yaml, yml, toml, ini, conf, cfg, env, xml, csv, tsv,
+                 html, css, scss, sass, less,
+                 sh, bash, zsh, fish, ps1,
+                 go, py, rs, rb, lua, pl, tcl,
+                 js, mjs, cjs, ts, tsx, jsx,
+                 c, h, cpp, hpp, cc, java, kt, swift, php, ex, exs, hs, clj, scala,
+                 sql, graphql, proto, diff, patch]
+  image-files:
+    kind: files
+    depth: 5
+    extensions: [png, jpg, jpeg, gif, webp, heic, tiff, svg]
+  audio-files:
+    kind: files
+    depth: 5
+    extensions: [mp3, m4a, aac, flac, wav, ogg, aiff, opus]
+
+# ── Aliases ──────────────────────────────────────────────────────────────
 aliases:
-  # replaces the old bare `opener <target>`: `opener open report.pdf`
-  open:
-    cmd: open
+  # open a repo in an editor; `opener code <TAB>` lists repos as full paths
+  code:
+    app: "Visual Studio Code"
+    source: repos
+
+  # clone a repo you don't have yet: `opener clone <TAB>` -> owner/name
+  clone:
+    cmd: "git clone"                # cmd is shell-word-split; no shell is run
+    source: gh-repos
+
+  # a directory in Finder; inline one-off source
+  show:
+    app: "Finder"
+    source: { kind: dirs, depth: 3 }
 
   edit:
     cmd: nvim
-    source:                       # inline source, not shared
-      kind: files
-      extensions: [go, md, txt]
+    source: { kind: files, extensions: [go, md, txt], depth: 5 }
 
-  code:
-    app: "Visual Studio Code"
-    source: git-repos             # reference a named source
+  # ── previewers: look without opening an editor ──
+  view:                            # bat: syntax-highlighted, pages if long
+    cmd: bat
+    source: text-files
 
+  ql:                              # macOS Quick Look
+    cmd: "qlmanage -p"
+    source: image-files
+
+  img:                             # same file list, opened in Preview.app
+    app: "Preview"
+    source: image-files
+
+  play:                            # QuickTime Player — window + scrubbing
+    app: "QuickTime Player"
+    source: audio-files
+
+  listen:                          # afplay — no window, plays then exits
+    cmd: afplay
+    source: audio-files
+
+  # a fixed list of URLs and/or paths
   web:
     app: "Google Chrome"
-    source: bookmarks
+    source:
+      kind: list
+      items:
+        - https://github.com
+        - https://news.ycombinator.com
 
-  clone:
-    cmd: "git clone"              # cmd is shell-word-split, no shell is run
-    source: gh-repos
+  # jump to a config file: `opener rc <TAB>` then pick one
+  rc:
+    app: "Visual Studio Code"
+    source:
+      kind: list
+      items:
+        - ~/.opener.yaml
+        - ~/.zshrc
+        - ~/.gitconfig
+        - ~/.vimrc
+        - ~/Library/Application Support/Code/User/settings.json   # spaces are fine
+
+  # bare-open escape hatch: `opener open report.pdf` / `opener open https://…`
+  open:
+    cmd: open
