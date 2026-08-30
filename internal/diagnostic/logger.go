@@ -1,5 +1,5 @@
 // Package diagnostic provides opener's verbose-mode diagnostic logging
-// interface, shared across config loading, resolution, and launching.
+// interface, shared across resolution and launching.
 package diagnostic
 
 import (
@@ -11,13 +11,6 @@ import (
 // decisions. Debug is a no-op unless verbose mode is enabled.
 type Logger interface {
 	Debug(format string, args ...any)
-}
-
-// Context bundles the diagnostic plumbing a resolution pipeline needs:
-// where to send trace messages, and which config file is being consulted.
-type Context struct {
-	Logger     Logger
-	ConfigPath string
 }
 
 type noopLogger struct{}
