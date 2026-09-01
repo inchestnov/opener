@@ -1,6 +1,6 @@
 # opener
 
-`opener` is a small macOS CLI that gives you one interface for opening files, directories, and applications — hiding the differences between specific macOS apps behind a layer of aliases and user configuration.
+`opener` is a small macOS CLI that gives you one interface for opening files, directories, applications, and URLs — behind a layer of named aliases, each of which knows how to open its targets and how to tab-complete them.
 
 ## Installation
 
@@ -29,97 +29,96 @@ go build -o bin/opener ./cmd/opener
 
 ## Usage
 
-Out of the box, `opener` just uses the system default:
+Every invocation is an **alias** followed by one or more **targets**:
 
 ```bash
-opener docs.pdf              # Open using default app
-opener ~/go/projects/opener  # Open directory in Finder
-opener https://github.com    # Open URL in default browser
+opener <alias> <target>...
 ```
+
+The alias decides how the targets open. With the [example config](examples/opener.yaml):
+
+```bash
+opener open docs.pdf                # `open` — hands the file to the system default
+opener code ~/src/opener           # `code` — opens the directory in VS Code
+opener web https://github.com      # `web`  — opens the URL in Chrome
+opener edit main.go notes.md       # `edit` — opens both files in nvim
+```
+
+There is no bare `opener <target>` form — define an `open` alias (`cmd: open`) for that.
 
 > [!TIP]
 > Typing `opener` in full gets old fast — add a shell alias:
 >
 > ```bash
 > alias o="opener"
-> o docs.pdf
+> o code ~/src/opener
 > ```
+
+### Shell completion
+
+`opener` generates completion scripts via `opener completion <shell>`.
+
+- `opener <TAB>` completes **alias names** (never files).
+- `opener <alias> <TAB>` completes **targets** from that alias's `source` (see
+  [Configuration](#configuration)) — full paths and URLs. An alias with no
+  `source` falls back to plain file completion; an unknown alias completes
+  nothing.
+
+```bash
+# zsh — add to a directory on your $fpath, e.g.
+opener completion zsh > "${fpath[1]}/_opener"
+
+# bash
+opener completion bash > /opt/homebrew/etc/bash_completion.d/opener
+
+# fish
+opener completion fish > ~/.config/fish/completions/opener.fish
+```
+
+Run `opener completion <shell> --help` for per-shell details. If you aliased
+`opener` to `o`, tell the shell the alias inherits the completion — zsh:
+`compdef o=opener`.
+
+> [!NOTE]
+> A `command` source runs on every `<TAB>` (with a 2-second timeout). Keep it
+> fast.
 
 ## Configuration
 
-`opener` reads `~/.opener.yaml` if it exists. The file is entirely optional — without it, existing files, directories, and URLs fall back to the system `open <target>`.
+`opener` reads `~/.opener.yaml` if it exists. Without it, `opener` has no
+aliases and every invocation is an "unknown alias" error. A full example lives
+in [`examples/opener.yaml`](examples/opener.yaml).
 
-#### `open.patterns` — match files by extension or glob
+The file has two top-level keys: `aliases` and `sources`.
 
-```yaml
-open:
-  patterns:
-    - pattern: "*.pdf"
-      app: "Google Chrome"
-```
+### `aliases`
 
-```bash
-opener document.pdf   # now opens in Chrome instead of the default app
-```
-
-`pattern` can be a glob (`*.pdf`) or a bare extension (`.pdf`, treated the same as `*.pdf`), matched case-insensitively against the filename. Patterns are checked in order; the first match wins.
-
-To match several extensions with one rule, use a brace group:
-
-```yaml
-open:
-  patterns:
-    - pattern: "*.{jpg,png,gif}"
-      app: "Preview"
-```
-
-A pattern rule's `cmd` takes a whole command line rather than a bare executable — useful when you need fixed flags baked in:
-
-```yaml
-open:
-  patterns:
-    - pattern: ".pdf"
-      cmd: "open -a 'Google Chrome'"
-```
-
-It's split into words the way a shell would (quotes honored), then run directly; no shell is ever invoked. Targets are appended to the end.
-
-#### `open.directory` — override how directories open
-
-```yaml
-open:
-  directory:
-    app: "Visual Studio Code"
-```
-
-```bash
-opener ~/go/projects/opener   # opens in Visual Studio Code instead of Finder
-```
-
-#### `aliases` — named shortcuts for `opener <alias> <target>...`
-
-Point an alias at a CLI program:
+Each alias opens its targets as a macOS application (`app`) or a CLI command
+(`cmd`):
 
 ```yaml
 aliases:
-  ide:
+  code:
+    app: "Visual Studio Code"
+  edit:
     cmd: nvim
 ```
 
 ```bash
-opener ide ~/go/projects/opener   # nvim ~/go/projects/opener
+opener code ~/src/opener   # open -a "Visual Studio Code" ~/src/opener
+opener edit README.md      # nvim README.md
 ```
 
-or at a macOS application:
+`cmd` is split into words the way a shell would (single/double quotes
+honored) and run directly — **no shell is ever invoked** — with the targets
+appended. This lets you bake in fixed flags:
 
 ```yaml
 aliases:
-  ide:
-    app: "Visual Studio Code"
-```
-
-```bash
-opener ide ~/go/projects/opener   # opens in Visual Studio Code
+  chrome:
+    cmd: "open -a 'Google Chrome'"
+  code:
+    cmd: "code -n"
 ```
 
 An alias that isn't in your config is an error:
@@ -129,37 +128,53 @@ $ opener foo .
 opener: unknown alias: foo
 ```
 
-#### `templates` — a link to a fixed file or project
+**Targets are passed through verbatim at open time.** `opener` never validates
+or rewrites them — `opener edit opener` runs `nvim opener` literally, whether
+or not a file named `opener` exists. The `source` below only affects
+completion.
+
+### `sources`
+
+A source describes how to discover tab-completion candidates for an alias's
+targets. Define reusable ones under `sources:` and reference them by name, or
+inline one directly on an alias:
 
 ```yaml
-templates:
-  bashrc:
-    path: ~/.bashrc
-    cmd: vim
+sources:
+  git-repos:
+    kind: dirs-with
+    roots: ["~/src", "~/work"]
+    marker: .git
+
+aliases:
+  code:
+    app: "Visual Studio Code"
+    source: git-repos           # by name
+  edit:
+    cmd: nvim
+    source:                     # inline
+      kind: files
+      extensions: [go, md]
 ```
 
-```bash
-opener bashrc   # vim ~/.bashrc
-```
+| kind | fields | completes |
+| --- | --- | --- |
+| `list` | `items` | the listed paths / URLs |
+| `files` | `roots` (default `["."]`), `extensions`, `depth` (default 2) | files under the roots |
+| `dirs` | `roots`, `depth` (default 1) | directories under the roots |
+| `dirs-with` | `roots`, `marker`, `depth` (default 1) | directories directly containing `marker` (e.g. `.git`) |
+| `command` | `run`, `cwd` (optional) | each line of the command's stdout |
 
-A template is a named shortcut, not a real target: `opener <name>` ignores
-whatever exists on disk at `<name>` and opens `path` instead. Checked before
-automatic-mode's usual file/directory/URL resolution, so a template name
-always wins over an on-disk file of the same name.
+Notes:
 
-`app`/`cmd` are optional. Set them to pin exactly how `path` opens, same as
-an alias. Leave both unset and `path` is resolved exactly as if you'd typed
-it directly — so a template can just pin *what* opens, and let `open.patterns`
-/ `open.directory` (or the system default) decide *how*:
-
-```yaml
-templates:
-  vimrc:
-    path: ~/.vimrc                 # a file -> matched against open.patterns, same as any other file
-  nvim-config:
-    path: ~/.config/nvim           # a directory -> opens in Finder (or open.directory, if set)
-```
-
-Any combination works: a file pinned to an app, a directory pinned to a CLI
-command, or either left to fall back to whatever automatic mode would
-otherwise do.
+- A root that is absolute or starts with `~` yields **absolute** candidates; a
+  relative root (`.`, `sub/`) yields candidates relative to the current
+  directory.
+- `depth` counts levels below a root (`1` = direct children). A negative depth
+  is unlimited.
+- `files` / `dirs` never descend into hidden directories (names starting with
+  `.`).
+- `command` runs via `sh -c`, so pipes and globs work; `stderr` is discarded
+  and it is killed after 2 seconds.
+- Completion candidates are always full values (full paths, full URLs) so that,
+  say, a repo named `opener` under two different roots is unambiguous.
