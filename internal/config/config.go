@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 
+	"github.com/inchestnov/opener/internal/base"
 	"github.com/inchestnov/opener/internal/pathx"
 )
 
@@ -26,14 +26,14 @@ import (
 // Base, when set, is the directory this alias's targets are written
 // relative to. It is the one setting that affects both halves: completion
 // candidates under Base are offered in their short, Base-relative form, and
-// at open time a target that is not anchored elsewhere (see
-// opener.Resolve) is joined back onto Base. Without Base, targets are
-// passed through exactly as typed.
+// at open time a target that is not anchored elsewhere is joined back onto
+// it. Without Base, targets are passed through exactly as typed. See the
+// base package for the join/trim rules.
 type Alias struct {
-	App    string `mapstructure:"app"`
-	Cmd    string `mapstructure:"cmd"`
-	Base   string `mapstructure:"base"`
-	Source Source `mapstructure:"source"`
+	App    string    `mapstructure:"app"`
+	Cmd    string    `mapstructure:"cmd"`
+	Base   base.Base `mapstructure:"base"`
+	Source Source    `mapstructure:"source"`
 }
 
 // Source is a target-discovery spec used for shell completion. In YAML it is
@@ -110,6 +110,7 @@ func LoadConfig(path string) (*Config, error) {
 		func(dc *mapstructure.DecoderConfig) { dc.ErrorUnused = true },
 		viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
 			sourceStringHook(),
+			baseStringHook(),
 			mapstructure.StringToTimeDurationHookFunc(),
 			mapstructure.StringToSliceHookFunc(","),
 		)),
@@ -117,33 +118,36 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := checkNullBase(&cfg, v.Get("aliases")); err != nil {
+	if err := rejectNullBase(&cfg, v.Get("aliases")); err != nil {
 		return nil, err
 	}
 	expandPaths(&cfg)
 	return &cfg, nil
 }
 
-// checkNullBase rejects an alias that has a `base:` key which decoded to the
-// empty string. The trap is YAML's, not ours: a bare `base: ~` is null, so
-// the setting would silently do nothing - completion would stay absolute and
-// targets would stay unjoined, with no error to explain why.
-func checkNullBase(cfg *Config, rawAliases any) error {
+// rejectNullBase rejects an alias that wrote a `base:` key which carried no
+// value. The trap is YAML's, not ours: a bare `base: ~` is null and never
+// reaches the decode hook, so the setting would silently do nothing -
+// completion would stay absolute and targets unjoined, with no error to
+// explain why. A `base:` with a real string is already a set base.Base by
+// this point (or, if empty, failed in base.Parse during Unmarshal); this
+// only has to catch the key-present-but-absent case.
+func rejectNullBase(cfg *Config, rawAliases any) error {
 	byName, ok := rawAliases.(map[string]any)
 	if !ok {
 		return nil
 	}
 	for name, a := range cfg.Aliases {
-		if a.Base != "" {
+		if a.Base.IsSet() {
 			continue
 		}
 		fields, ok := byName[name].(map[string]any)
 		if !ok {
 			continue
 		}
-		if v, present := fields["base"]; present && (v == nil || v == "") {
+		if _, present := fields["base"]; present {
 			return fmt.Errorf("alias %q: `base:` is empty - YAML reads a bare `~` as null, "+
-				"so quote it (`base: \"~\"`) or use `base: $HOME`", name)
+				`so quote it (base: "~") or use base: $HOME`, name)
 		}
 	}
 	return nil
@@ -152,12 +156,10 @@ func checkNullBase(cfg *Config, rawAliases any) error {
 // expandPaths rewrites every path-valued setting through pathx.Expand, so
 // $VAR and ~ are resolved once, here, rather than at each point of use.
 // URLs and other non-path values pass through untouched: they contain
-// neither a $ nor a leading ~.
+// neither a $ nor a leading ~. (An alias's Base is already expanded - it
+// went through base.Parse in the decode hook.)
 func expandPaths(cfg *Config) {
 	for name, a := range cfg.Aliases {
-		if a.Base != "" {
-			a.Base = filepath.Clean(pathx.Expand(a.Base))
-		}
 		expandSourcePaths(&a.Source)
 		cfg.Aliases[name] = a
 	}
@@ -188,5 +190,18 @@ func sourceStringHook() mapstructure.DecodeHookFuncType {
 			return data, nil
 		}
 		return Source{Ref: data.(string)}, nil
+	}
+}
+
+// baseStringHook turns an alias's `base:` string into a base.Base, expanding
+// and cleaning it. An empty string fails here; a null (`base: ~`) never
+// reaches a hook and is caught by rejectNullBase instead.
+func baseStringHook() mapstructure.DecodeHookFuncType {
+	baseType := reflect.TypeOf(base.Base{})
+	return func(from, to reflect.Type, data any) (any, error) {
+		if to != baseType || from.Kind() != reflect.String {
+			return data, nil
+		}
+		return base.Parse(data.(string))
 	}
 }

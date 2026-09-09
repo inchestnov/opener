@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/inchestnov/opener/internal/base"
 	"github.com/inchestnov/opener/internal/config"
 )
 
@@ -32,7 +33,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := New(tt.spec, named, "")
+			_, err := New(tt.spec, named, base.Base{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New(%+v) error = %v, wantErr %v", tt.spec, err, tt.wantErr)
 			}
@@ -64,7 +65,7 @@ func TestListSource(t *testing.T) {
 // repo name matches nothing.
 func TestBase_TrimsCandidatesAndEnablesShortPrefix(t *testing.T) {
 	s := &listSource{
-		base: "/ws",
+		base: base.Must("/ws"),
 		items: []string{
 			"/ws/core-apps/api",
 			"/ws/catalog",
@@ -94,39 +95,14 @@ func TestBase_TrimsCandidatesAndEnablesShortPrefix(t *testing.T) {
 	}
 }
 
-func TestResolveRoots(t *testing.T) {
-	tests := []struct {
-		name  string
-		roots []string
-		base  string
-		want  []string
-	}{
-		{"no base leaves roots alone", []string{"."}, "", []string{"."}},
-		{"no base, no roots", nil, "", nil},
-		{"omitted roots walk the base", nil, "/ws", []string{"/ws"}},
-		{"empty roots walk the base", []string{}, "/ws", []string{"/ws"}},
-		{"relative root anchors to base", []string{"core-apps"}, "/ws", []string{"/ws/core-apps"}},
-		{"dot root is the base", []string{"."}, "/ws", []string{"/ws"}},
-		{"absolute root wins", []string{"/other"}, "/ws", []string{"/other"}},
-		{"mixed", []string{"sub", "/other"}, "/ws", []string{"/ws/sub", "/other"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := resolveRoots(tt.roots, tt.base); !slices.Equal(got, tt.want) {
-				t.Errorf("resolveRoots(%v, %q) = %v, want %v", tt.roots, tt.base, got, tt.want)
-			}
-		})
-	}
-}
-
 // The end-to-end shape of the fix: an alias states its directory once, in
-// base, and a source with no roots of its own walks it.
+// base, and a source with no roots of its own walks it. (base.ResolveRoots
+// is unit-tested in the base package; this checks New wires it in.)
 func TestBase_SuppliesRootsForWalk(t *testing.T) {
 	root := t.TempDir()
 	mkfiles(t, root, "core-apps/api/.git/HEAD", "catalog/.git/HEAD")
 
-	s, err := New(config.Source{Kind: "dirs-with", Marker: ".git", Depth: ptr(3)}, nil, root)
+	s, err := New(config.Source{Kind: "dirs-with", Marker: ".git", Depth: ptr(3)}, nil, base.Must(root))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +119,7 @@ func ptr(i int) *int { return &i }
 
 // base must match on a path-segment boundary, not as a raw string prefix.
 func TestBase_DoesNotTrimSiblingWithSharedPrefix(t *testing.T) {
-	s := &listSource{base: "/ws", items: []string{"/ws-mirror/env", "/ws"}}
+	s := &listSource{base: base.Must("/ws"), items: []string{"/ws-mirror/env", "/ws"}}
 
 	got, err := s.Candidates("")
 	if err != nil {

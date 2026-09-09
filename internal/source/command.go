@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/inchestnov/opener/internal/base"
 )
 
 // commandTimeout bounds a command source: it runs on every <TAB>, so a slow
@@ -16,7 +18,7 @@ const commandTimeout = 2 * time.Second
 // a candidate. The command is run via `sh -c` so pipes, globs, and $HOME
 // work; it comes from the user's own ~/.opener.yaml.
 type commandSource struct {
-	base string
+	base base.Base
 	run  string
 	cwd  string
 }

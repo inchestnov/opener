@@ -12,11 +12,10 @@ package source
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/inchestnov/opener/internal/base"
 	"github.com/inchestnov/opener/internal/config"
 	"github.com/inchestnov/opener/internal/pathx"
 )
@@ -35,10 +34,10 @@ type Source interface {
 // named (the config's top-level `sources:` map); an inline spec switches on
 // Kind. Referencing another reference is rejected.
 //
-// base is the owning alias's `base:`, or "" if it has none. Candidates
-// found under base are offered relative to it, matching the short form
-// those targets are typed in.
-func New(spec config.Source, named map[string]config.Source, base string) (Source, error) {
+// b is the owning alias's base, or the zero base.Base if it has none.
+// Candidates found under it are offered relative to it, matching the short
+// form those targets are typed in.
+func New(spec config.Source, named map[string]config.Source, b base.Base) (Source, error) {
 	if spec.Ref != "" {
 		s, ok := named[spec.Ref]
 		if !ok {
@@ -50,25 +49,25 @@ func New(spec config.Source, named map[string]config.Source, base string) (Sourc
 		spec = s
 	}
 
-	roots := resolveRoots(spec.Roots, base)
+	roots := b.ResolveRoots(spec.Roots)
 
 	switch spec.Kind {
 	case "list":
-		return &listSource{base: base, items: spec.Items}, nil
+		return &listSource{base: b, items: spec.Items}, nil
 	case "files":
-		return &walkSource{base: base, roots: roots, depth: depthOr(spec.Depth, 2), emit: wantFiles(normExts(spec.Extensions))}, nil
+		return &walkSource{base: b, roots: roots, depth: depthOr(spec.Depth, 2), emit: wantFiles(normExts(spec.Extensions))}, nil
 	case "dirs":
-		return &walkSource{base: base, roots: roots, depth: depthOr(spec.Depth, 1), emit: wantDirs}, nil
+		return &walkSource{base: b, roots: roots, depth: depthOr(spec.Depth, 1), emit: wantDirs}, nil
 	case "dirs-with":
 		if spec.Marker == "" {
 			return nil, errors.New("dirs-with source requires a marker")
 		}
-		return &walkSource{base: base, roots: roots, depth: depthOr(spec.Depth, 1), emit: wantMarker(spec.Marker)}, nil
+		return &walkSource{base: b, roots: roots, depth: depthOr(spec.Depth, 1), emit: wantMarker(spec.Marker)}, nil
 	case "command":
 		if spec.Run == "" {
 			return nil, errors.New("command source requires run")
 		}
-		return &commandSource{base: base, run: spec.Run, cwd: spec.Cwd}, nil
+		return &commandSource{base: b, run: spec.Run, cwd: spec.Cwd}, nil
 	case "":
 		return nil, errors.New("source has no kind")
 	default:
@@ -78,7 +77,7 @@ func New(spec config.Source, named map[string]config.Source, base string) (Sourc
 
 // listSource offers a fixed set of paths and/or URLs.
 type listSource struct {
-	base  string
+	base  base.Base
 	items []string
 }
 
@@ -86,10 +85,10 @@ func (l *listSource) Candidates(toComplete string) ([]string, error) {
 	return filterSort(l.items, toComplete, l.base), nil
 }
 
-// filterSort rebases the candidates onto base, keeps those that start with
+// filterSort shortens the candidates against b, keeps those that start with
 // toComplete, trims blanks, de-duplicates, sorts, and caps the result at
 // maxCandidates.
-func filterSort(cands []string, toComplete, base string) []string {
+func filterSort(cands []string, toComplete string, b base.Base) []string {
 	prefix := pathx.Expand(toComplete)
 	seen := make(map[string]struct{}, len(cands))
 	var out []string
@@ -98,7 +97,7 @@ func filterSort(cands []string, toComplete, base string) []string {
 		if c == "" {
 			continue
 		}
-		c = rebase(c, base)
+		c = b.Shorten(c)
 		if !strings.HasPrefix(c, prefix) {
 			continue
 		}
@@ -113,47 +112,6 @@ func filterSort(cands []string, toComplete, base string) []string {
 		out = out[:maxCandidates]
 	}
 	return out
-}
-
-// resolveRoots anchors a walk's roots to base, so `base:` means one thing
-// throughout an alias: the directory its paths are relative to.
-//
-// Omitting roots entirely walks base itself - an alias that already names
-// its directory in `base:` should not have to repeat it. A relative root is
-// resolved against base rather than the current directory, which is both
-// the useful reading and the safe one: a cwd-relative candidate would be
-// joined back onto base at open time and silently point somewhere else.
-// Absolute roots are left alone, and without a base nothing changes.
-func resolveRoots(roots []string, base string) []string {
-	if base == "" {
-		return roots
-	}
-	if len(roots) == 0 {
-		return []string{base}
-	}
-	out := make([]string, len(roots))
-	for i, root := range roots {
-		if filepath.IsAbs(root) {
-			out[i] = root
-			continue
-		}
-		out[i] = filepath.Join(base, root)
-	}
-	return out
-}
-
-// rebase strips base from candidate c, so an alias with a base completes to
-// the same short paths its targets are written as. A candidate that does
-// not live under base - a URL, or a path from a source spanning several
-// roots - keeps its full form, and stays completable by typing that form.
-func rebase(c, base string) string {
-	if base == "" {
-		return c
-	}
-	if rest := strings.TrimPrefix(c, base+string(os.PathSeparator)); rest != c {
-		return rest
-	}
-	return c
 }
 
 // normExts lowercases each extension and strips a leading dot, dropping

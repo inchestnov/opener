@@ -197,7 +197,7 @@ aliases:
 		t.Fatalf("LoadConfig() error = %v, want nil", err)
 	}
 
-	if got, want := cfg.Aliases["workspace"].Base, "/home/tester/workspace"; got != want {
+	if got, want := cfg.Aliases["workspace"].Base.String(), "/home/tester/workspace"; got != want {
 		t.Errorf("Aliases[workspace].Base = %q, want %q", got, want)
 	}
 	if got, want := cfg.Sources["repos"].Roots, []string{"/home/tester/workspace"}; !slices.Equal(got, want) {
@@ -218,7 +218,7 @@ func TestLoadConfig_BaseIsCleaned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v, want nil", err)
 	}
-	if got, want := cfg.Aliases["w"].Base, "/home/tester/workspace"; got != want {
+	if got, want := cfg.Aliases["w"].Base.String(), "/home/tester/workspace"; got != want {
 		t.Errorf("Base = %q, want %q (trailing separator cleaned)", got, want)
 	}
 }
@@ -253,8 +253,8 @@ func TestLoadConfig_NoBaseIsFine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v, want nil", err)
 	}
-	if got := cfg.Aliases["w"].Base; got != "" {
-		t.Errorf("Base = %q, want empty", got)
+	if got := cfg.Aliases["w"].Base; got.IsSet() {
+		t.Errorf("Base = %q, want unset", got)
 	}
 }
 

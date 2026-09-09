@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/inchestnov/opener/internal/base"
 )
 
 // emitFunc decides, for one entry visited during a walk, whether to emit it
@@ -21,7 +23,7 @@ type emitFunc func(path string, d fs.DirEntry) (take, skip bool)
 // is unlimited. Hidden directories (names starting with ".") are never
 // descended into.
 type walkSource struct {
-	base  string
+	base  base.Base
 	roots []string
 	depth int
 	emit  emitFunc
