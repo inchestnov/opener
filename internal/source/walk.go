@@ -15,12 +15,13 @@ type emitFunc func(path string, d fs.DirEntry) (take, skip bool)
 // walkSource lists filesystem candidates under one or more roots. It backs
 // the "files", "dirs", and "dirs-with" kinds via different emit funcs.
 //
-// A root that is absolute or starts with ~ yields absolute candidates; a
-// relative root yields candidates relative to the current directory. depth
-// limits how many levels below a root are visited (1 = direct children); a
-// negative depth is unlimited. Hidden directories (names starting with ".")
-// are never descended into.
+// An absolute root yields absolute candidates; a relative root yields
+// candidates relative to the current directory. depth limits how many
+// levels below a root are visited (1 = direct children); a negative depth
+// is unlimited. Hidden directories (names starting with ".") are never
+// descended into.
 type walkSource struct {
+	base  string
 	roots []string
 	depth int
 	emit  emitFunc
@@ -34,7 +35,7 @@ func (w *walkSource) Candidates(toComplete string) ([]string, error) {
 
 	var out []string
 	for _, root := range roots {
-		fsRoot := expandUser(root)
+		fsRoot := root
 		if fsRoot == "" {
 			fsRoot = "."
 		}
@@ -70,7 +71,7 @@ func (w *walkSource) Candidates(toComplete string) ([]string, error) {
 			return nil
 		})
 	}
-	return filterSort(out, toComplete), nil
+	return filterSort(out, toComplete, w.base), nil
 }
 
 // wantFiles emits regular files, narrowed to the given extensions when the

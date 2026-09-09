@@ -27,6 +27,7 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 }
 
 func TestLoadConfig_ValidFile(t *testing.T) {
+	t.Setenv("HOME", "/home/tester")
 	path := filepath.Join(t.TempDir(), "opener.yaml")
 	writeFile(t, path, `
 sources:
@@ -91,7 +92,8 @@ aliases:
 	if repos.Depth == nil || *repos.Depth != 2 {
 		t.Errorf("Sources[repos].Depth = %v, want 2", repos.Depth)
 	}
-	if got, want := cfg.Sources["repos"].Roots, []string{"~/src", "~/work"}; !slices.Equal(got, want) {
+	// Roots are expanded at load time.
+	if got, want := cfg.Sources["repos"].Roots, []string{"/home/tester/src", "/home/tester/work"}; !slices.Equal(got, want) {
 		t.Errorf("Sources[repos].Roots = %v, want %v", got, want)
 	}
 	if got, want := cfg.Sources["gh"].Run, "gh repo list"; got != want {
@@ -162,6 +164,97 @@ func TestLoadConfig_MalformedFile(t *testing.T) {
 
 	if _, err := LoadConfig(path); err == nil {
 		t.Fatal("LoadConfig() error = nil, want error for malformed YAML")
+	}
+}
+
+func TestLoadConfig_ExpandsEnvAndTilde(t *testing.T) {
+	t.Setenv("HOME", "/home/tester")
+	t.Setenv("SRC_ROOT", "/home/tester/workspace")
+
+	path := filepath.Join(t.TempDir(), "opener.yaml")
+	writeFile(t, path, `
+sources:
+  repos:
+    kind: dirs-with
+    roots: ["$SRC_ROOT"]
+    marker: .git
+  configs:
+    kind: list
+    items:
+      - $SRC_ROOT/notes.md
+      - ~/.zshrc
+      - https://example.com
+
+aliases:
+  workspace:
+    app: "Visual Studio Code"
+    base: $SRC_ROOT
+    source: repos
+`)
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v, want nil", err)
+	}
+
+	if got, want := cfg.Aliases["workspace"].Base, "/home/tester/workspace"; got != want {
+		t.Errorf("Aliases[workspace].Base = %q, want %q", got, want)
+	}
+	if got, want := cfg.Sources["repos"].Roots, []string{"/home/tester/workspace"}; !slices.Equal(got, want) {
+		t.Errorf("Sources[repos].Roots = %v, want %v", got, want)
+	}
+	want := []string{"/home/tester/workspace/notes.md", "/home/tester/.zshrc", "https://example.com"}
+	if got := cfg.Sources["configs"].Items; !slices.Equal(got, want) {
+		t.Errorf("Sources[configs].Items = %v, want %v", got, want)
+	}
+}
+
+func TestLoadConfig_BaseIsCleaned(t *testing.T) {
+	t.Setenv("HOME", "/home/tester")
+	path := filepath.Join(t.TempDir(), "opener.yaml")
+	writeFile(t, path, "aliases:\n  w:\n    app: X\n    base: ~/workspace/\n")
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v, want nil", err)
+	}
+	if got, want := cfg.Aliases["w"].Base, "/home/tester/workspace"; got != want {
+		t.Errorf("Base = %q, want %q (trailing separator cleaned)", got, want)
+	}
+}
+
+// A bare `base: ~` is YAML null, which would turn the setting into a silent
+// no-op. It has to fail loudly instead.
+func TestLoadConfig_RejectsNullBase(t *testing.T) {
+	for _, body := range []string{
+		"aliases:\n  w:\n    app: X\n    base: ~\n",
+		"aliases:\n  w:\n    app: X\n    base:\n",
+		"aliases:\n  w:\n    app: X\n    base: \"\"\n",
+	} {
+		path := filepath.Join(t.TempDir(), "opener.yaml")
+		writeFile(t, path, body)
+
+		_, err := LoadConfig(path)
+		if err == nil {
+			t.Fatalf("LoadConfig(%q) error = nil, want error for null base", body)
+		}
+		if !strings.Contains(err.Error(), "base") {
+			t.Errorf("error = %q, want it to mention base", err)
+		}
+	}
+}
+
+// An alias with no `base:` key at all is the common case and stays valid.
+func TestLoadConfig_NoBaseIsFine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "opener.yaml")
+	writeFile(t, path, "aliases:\n  w:\n    app: X\n")
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v, want nil", err)
+	}
+	if got := cfg.Aliases["w"].Base; got != "" {
+		t.Errorf("Base = %q, want empty", got)
 	}
 }
 

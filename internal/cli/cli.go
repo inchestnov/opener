@@ -17,7 +17,7 @@ import (
 	"github.com/inchestnov/opener/internal/source"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 // Options captures user-facing execution flags.
 type Options struct {
@@ -90,7 +90,7 @@ func completeArg(_ *cobra.Command, args []string, toComplete string) ([]string, 
 		return nil, cobra.ShellCompDirectiveDefault
 	}
 
-	src, err := source.New(a.Source, cfg.Sources)
+	src, err := source.New(a.Source, cfg.Sources, a.Base)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}

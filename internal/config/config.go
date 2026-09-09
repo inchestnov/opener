@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
+
+	"github.com/inchestnov/opener/internal/pathx"
 )
 
 // Alias is a named launcher for `opener <alias> <target>...`: it opens its
@@ -18,12 +21,18 @@ import (
 // honored) and run directly - no shell is ever invoked - with the targets
 // appended, so `cmd: "open -a 'Google Chrome'"` works.
 //
-// Source, when set, drives shell completion of this alias's targets. It is
-// never consulted when a target is opened: whatever the user types is
-// passed through verbatim.
+// Source, when set, drives shell completion of this alias's targets.
+//
+// Base, when set, is the directory this alias's targets are written
+// relative to. It is the one setting that affects both halves: completion
+// candidates under Base are offered in their short, Base-relative form, and
+// at open time a target that is not anchored elsewhere (see
+// opener.Resolve) is joined back onto Base. Without Base, targets are
+// passed through exactly as typed.
 type Alias struct {
 	App    string `mapstructure:"app"`
 	Cmd    string `mapstructure:"cmd"`
+	Base   string `mapstructure:"base"`
 	Source Source `mapstructure:"source"`
 }
 
@@ -108,7 +117,66 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := checkNullBase(&cfg, v.Get("aliases")); err != nil {
+		return nil, err
+	}
+	expandPaths(&cfg)
 	return &cfg, nil
+}
+
+// checkNullBase rejects an alias that has a `base:` key which decoded to the
+// empty string. The trap is YAML's, not ours: a bare `base: ~` is null, so
+// the setting would silently do nothing - completion would stay absolute and
+// targets would stay unjoined, with no error to explain why.
+func checkNullBase(cfg *Config, rawAliases any) error {
+	byName, ok := rawAliases.(map[string]any)
+	if !ok {
+		return nil
+	}
+	for name, a := range cfg.Aliases {
+		if a.Base != "" {
+			continue
+		}
+		fields, ok := byName[name].(map[string]any)
+		if !ok {
+			continue
+		}
+		if v, present := fields["base"]; present && (v == nil || v == "") {
+			return fmt.Errorf("alias %q: `base:` is empty - YAML reads a bare `~` as null, "+
+				"so quote it (`base: \"~\"`) or use `base: $HOME`", name)
+		}
+	}
+	return nil
+}
+
+// expandPaths rewrites every path-valued setting through pathx.Expand, so
+// $VAR and ~ are resolved once, here, rather than at each point of use.
+// URLs and other non-path values pass through untouched: they contain
+// neither a $ nor a leading ~.
+func expandPaths(cfg *Config) {
+	for name, a := range cfg.Aliases {
+		if a.Base != "" {
+			a.Base = filepath.Clean(pathx.Expand(a.Base))
+		}
+		expandSourcePaths(&a.Source)
+		cfg.Aliases[name] = a
+	}
+	for name, s := range cfg.Sources {
+		expandSourcePaths(&s)
+		cfg.Sources[name] = s
+	}
+}
+
+// expandSourcePaths expands the path-valued fields of a single source spec
+// in place.
+func expandSourcePaths(s *Source) {
+	for i, root := range s.Roots {
+		s.Roots[i] = pathx.Expand(root)
+	}
+	for i, item := range s.Items {
+		s.Items[i] = pathx.Expand(item)
+	}
+	s.Cwd = pathx.Expand(s.Cwd)
 }
 
 // sourceStringHook lets an alias's `source:` be written as a bare string

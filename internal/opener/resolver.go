@@ -4,6 +4,8 @@ package opener
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/inchestnov/opener/internal/config"
 	"github.com/inchestnov/opener/internal/diagnostic"
@@ -33,8 +35,11 @@ type Action struct {
 //
 // An alias's cmd is split into words the way a shell would (quotes
 // honored), never run through a shell, with targets appended to the
-// resulting argv. An alias's source, if any, is not consulted here: targets
-// are passed through exactly as typed.
+// resulting argv. An alias's source, if any, is not consulted here.
+//
+// Targets are passed through exactly as typed unless the alias sets a
+// `base:`, in which case each target that is not already anchored
+// elsewhere is joined onto it - see rebaseTarget.
 func Resolve(alias string, targets []string, cfg *config.Config, logger diagnostic.Logger) (Action, error) {
 	logger.Debug("alias: %s", alias)
 	for _, target := range targets {
@@ -48,6 +53,14 @@ func Resolve(alias string, targets []string, cfg *config.Config, logger diagnost
 	}
 	if a.App == "" && a.Cmd == "" {
 		return Action{}, fmt.Errorf("alias %q has neither app nor cmd configured", alias)
+	}
+
+	if a.Base != "" {
+		logger.Debug("base: %s", a.Base)
+		targets = rebaseTargets(targets, a.Base)
+		for _, target := range targets {
+			logger.Debug("rebased target: %s", target)
+		}
 	}
 
 	if a.Cmd != "" {
@@ -66,4 +79,37 @@ func Resolve(alias string, targets []string, cfg *config.Config, logger diagnost
 	logger.Debug("alias type: application")
 	logger.Debug("application: %s", a.App)
 	return Action{Strategy: StrategyApp, Name: a.App, Args: targets}, nil
+}
+
+// rebaseTargets joins each target onto base, the inverse of the trimming
+// the completion side does, so that what you tab-complete is what opens.
+func rebaseTargets(targets []string, base string) []string {
+	out := make([]string, len(targets))
+	for i, target := range targets {
+		out[i] = rebaseTarget(target, base)
+	}
+	return out
+}
+
+// rebaseTarget joins target onto base, unless target already says where it
+// lives: an absolute path, a ~ path, an explicit ./ or ../ path, or
+// anything carrying a URL scheme. Those escape hatches are what let an
+// alias with a base still open a file from somewhere else entirely.
+func rebaseTarget(target, base string) string {
+	switch {
+	case target == "":
+		return target
+	case filepath.IsAbs(target):
+		return target
+	case target == "~" || strings.HasPrefix(target, "~/"):
+		return target
+	case target == "." || target == "..":
+		return target
+	case strings.HasPrefix(target, "./") || strings.HasPrefix(target, "../"):
+		return target
+	case strings.Contains(target, "://"):
+		return target
+	default:
+		return filepath.Join(base, target)
+	}
 }
