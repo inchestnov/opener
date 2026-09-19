@@ -6,6 +6,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/inchestnov/opener/internal/base"
 	"github.com/inchestnov/opener/internal/config"
 )
 
@@ -32,7 +33,7 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := New(tt.spec, named)
+			_, err := New(tt.spec, named, base.Base{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New(%+v) error = %v, wantErr %v", tt.spec, err, tt.wantErr)
 			}
@@ -41,8 +42,8 @@ func TestNew(t *testing.T) {
 }
 
 func TestListSource(t *testing.T) {
-	t.Setenv("HOME", "/home/tester")
-	s := &listSource{items: []string{"https://z.example", "https://a.example", "~/notes"}}
+	// Items arrive already expanded by config.LoadConfig.
+	s := &listSource{items: []string{"https://z.example", "https://a.example", "/home/tester/notes"}}
 
 	got, err := s.Candidates("")
 	if err != nil {
@@ -56,6 +57,76 @@ func TestListSource(t *testing.T) {
 	got, _ = s.Candidates("https://z")
 	if !slices.Equal(got, []string{"https://z.example"}) {
 		t.Errorf("Candidates(prefix) = %v, want [https://z.example]", got)
+	}
+}
+
+// A base turns candidates under it into the short form targets are typed
+// in - which is the whole point: with absolute candidates, typing a bare
+// repo name matches nothing.
+func TestBase_TrimsCandidatesAndEnablesShortPrefix(t *testing.T) {
+	s := &listSource{
+		base: base.Must("/ws"),
+		items: []string{
+			"/ws/core-apps/api",
+			"/ws/catalog",
+			"/elsewhere/other",
+			"https://example.com",
+		},
+	}
+
+	got, err := s.Candidates("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/elsewhere/other", "catalog", "core-apps/api", "https://example.com"}
+	if !slices.Equal(got, want) {
+		t.Errorf("Candidates(\"\") = %v, want %v", got, want)
+	}
+
+	got, _ = s.Candidates("cat")
+	if !slices.Equal(got, []string{"catalog"}) {
+		t.Errorf("Candidates(\"cat\") = %v, want [catalog]", got)
+	}
+
+	// A candidate outside base keeps its full form and stays completable.
+	got, _ = s.Candidates("/elsewhere")
+	if !slices.Equal(got, []string{"/elsewhere/other"}) {
+		t.Errorf("Candidates(\"/elsewhere\") = %v, want [/elsewhere/other]", got)
+	}
+}
+
+// The end-to-end shape of the fix: an alias states its directory once, in
+// base, and a source with no roots of its own walks it. (base.ResolveRoots
+// is unit-tested in the base package; this checks New wires it in.)
+func TestBase_SuppliesRootsForWalk(t *testing.T) {
+	root := t.TempDir()
+	mkfiles(t, root, "core-apps/api/.git/HEAD", "catalog/.git/HEAD")
+
+	s, err := New(config.Source{Kind: "dirs-with", Marker: ".git", Depth: ptr(3)}, nil, base.Must(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Candidates("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"catalog", "core-apps/api"}; !slices.Equal(got, want) {
+		t.Errorf("Candidates(\"\") = %v, want %v", got, want)
+	}
+}
+
+func ptr(i int) *int { return &i }
+
+// base must match on a path-segment boundary, not as a raw string prefix.
+func TestBase_DoesNotTrimSiblingWithSharedPrefix(t *testing.T) {
+	s := &listSource{base: base.Must("/ws"), items: []string{"/ws-mirror/env", "/ws"}}
+
+	got, err := s.Candidates("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(got, []string{"/ws", "/ws-mirror/env"}) {
+		t.Errorf("Candidates(\"\") = %v, want [/ws /ws-mirror/env]", got)
 	}
 }
 
@@ -181,22 +252,6 @@ func TestCommandSource_Timeout(t *testing.T) {
 	_, err := (&commandSource{run: "sleep 5"}).Candidates("")
 	if err == nil {
 		t.Error("Candidates() error = nil, want timeout error")
-	}
-}
-
-func TestExpandUser(t *testing.T) {
-	t.Setenv("HOME", "/home/tester")
-	cases := map[string]string{
-		"~":             "/home/tester",
-		"~/code":        "/home/tester/code",
-		"relative/path": "relative/path",
-		"/absolute":     "/absolute",
-		"~user/thing":   "~user/thing",
-	}
-	for in, want := range cases {
-		if got := expandUser(in); got != want {
-			t.Errorf("expandUser(%q) = %q, want %q", in, got, want)
-		}
 	}
 }
 

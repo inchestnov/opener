@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/inchestnov/opener/internal/base"
 )
 
 // commandTimeout bounds a command source: it runs on every <TAB>, so a slow
@@ -16,8 +18,9 @@ const commandTimeout = 2 * time.Second
 // a candidate. The command is run via `sh -c` so pipes, globs, and $HOME
 // work; it comes from the user's own ~/.opener.yaml.
 type commandSource struct {
-	run string
-	cwd string
+	base base.Base
+	run  string
+	cwd  string
 }
 
 func (c *commandSource) Candidates(toComplete string) ([]string, error) {
@@ -26,7 +29,7 @@ func (c *commandSource) Candidates(toComplete string) ([]string, error) {
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", c.run)
 	if c.cwd != "" {
-		cmd.Dir = expandUser(c.cwd)
+		cmd.Dir = c.cwd
 	}
 	cmd.Stderr = io.Discard
 
@@ -34,5 +37,5 @@ func (c *commandSource) Candidates(toComplete string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return filterSort(strings.Split(string(out), "\n"), toComplete), nil
+	return filterSort(strings.Split(string(out), "\n"), toComplete, c.base), nil
 }

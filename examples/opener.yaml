@@ -3,7 +3,9 @@
 # opener runs as:  opener <alias> <target>...
 # An alias says how to open its targets (app or cmd). Its `source`, if any,
 # only supplies <TAB> completion candidates — at open time whatever you type
-# is passed through verbatim.
+# is passed through verbatim, unless the alias sets a `base` (see `mono`).
+#
+# `base`, `roots` and `items` expand $VAR / ${VAR} and a leading ~.
 
 # ── Reusable source blocks ───────────────────────────────────────────────
 # Define a source once here, then point several aliases at it by name.
@@ -49,6 +51,20 @@ aliases:
   code:
     app: "Visual Studio Code"
     source: repos
+
+  # same idea, but anchored: `base` names the directory once — the source
+  # walks it (no `roots:` needed), completion offers the short paths under
+  # it (`api`, `web/admin`) instead of full ones, and opening joins them
+  # back on. Targets that say where they live — /abs, ~/x, ./x, a URL — are
+  # left alone, so this alias still opens anything else.
+  # Use $HOME or a quoted "~"; a bare `base: ~` is YAML null and is rejected.
+  mono:
+    app: "Visual Studio Code"
+    base: $HOME/src/monorepo       # or an env var: $MONO_ROOT
+    source:
+      kind: dirs-with
+      marker: .git
+      depth: 3
 
   # clone a repo you don't have yet: `opener clone <TAB>` -> owner/name
   clone:

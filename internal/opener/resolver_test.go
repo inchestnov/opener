@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/inchestnov/opener/internal/base"
 	"github.com/inchestnov/opener/internal/config"
 	"github.com/inchestnov/opener/internal/diagnostic"
 )
@@ -122,6 +123,45 @@ func TestResolve_AliasSourceIgnoredAtOpenTime(t *testing.T) {
 	}
 	if !slices.Equal(action.Args, []string{"whatever-typed"}) {
 		t.Errorf("Args = %v, want [whatever-typed] (target passed through verbatim)", action.Args)
+	}
+}
+
+// Resolve routes every target through the alias's base; the full join/trim
+// matrix is covered in the base package.
+func TestResolve_Base(t *testing.T) {
+	cfg := &config.Config{
+		Aliases: map[string]config.Alias{
+			"workspace": {App: "Visual Studio Code", Base: base.Must("/ws")},
+		},
+	}
+
+	action, err := Resolve("workspace", []string{"catalog", "/etc/hosts"}, cfg, diagnostic.Noop)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if want := []string{"/ws/catalog", "/etc/hosts"}; !slices.Equal(action.Args, want) {
+		t.Errorf("Args = %v, want %v", action.Args, want)
+	}
+}
+
+// With a cmd alias, rebased targets must land after the alias's own fixed
+// flags, not in place of them.
+func TestResolve_BaseWithCmdFlags(t *testing.T) {
+	cfg := &config.Config{
+		Aliases: map[string]config.Alias{
+			"edit": {Cmd: "nvim -p", Base: base.Must("/ws")},
+		},
+	}
+
+	action, err := Resolve("edit", []string{"a/x.go", "/tmp/y.go"}, cfg, diagnostic.Noop)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v, want nil", err)
+	}
+	if got, want := action.Name, "nvim"; got != want {
+		t.Errorf("Name = %q, want %q", got, want)
+	}
+	if want := []string{"-p", "/ws/a/x.go", "/tmp/y.go"}; !slices.Equal(action.Args, want) {
+		t.Errorf("Args = %v, want %v", action.Args, want)
 	}
 }
 

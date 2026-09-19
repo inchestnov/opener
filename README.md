@@ -60,9 +60,9 @@ There is no bare `opener <target>` form — define an `open` alias (`cmd: open`)
 
 - `opener <TAB>` completes **alias names** (never files).
 - `opener <alias> <TAB>` completes **targets** from that alias's `source` (see
-  [Configuration](#configuration)) — full paths and URLs. An alias with no
-  `source` falls back to plain file completion; an unknown alias completes
-  nothing.
+  [Configuration](#configuration)) — full paths and URLs, or paths relative to
+  the alias's [`base`](#base) if it has one. An alias with no `source` falls
+  back to plain file completion; an unknown alias completes nothing.
 
 ```bash
 # zsh — add to a directory on your $fpath, e.g.
@@ -131,7 +131,59 @@ opener: unknown alias: foo
 **Targets are passed through verbatim at open time.** `opener` never validates
 or rewrites them — `opener edit opener` runs `nvim opener` literally, whether
 or not a file named `opener` exists. The `source` below only affects
-completion.
+completion. The one exception is [`base`](#base), which rewrites targets by
+design.
+
+### `base`
+
+Aliases whose targets all live under one directory get long, repetitive
+completions: every candidate carries the same absolute prefix, so
+`opener code cat<TAB>` matches nothing — completion only matches from the
+start of the candidate, and every candidate starts with `/Users/you/…`.
+
+`base` fixes both ends at once:
+
+```yaml
+aliases:
+  code:
+    app: "Visual Studio Code"
+    base: $SRC_ROOT
+    source:
+      kind: dirs-with      # no `roots:` — the walk starts at base
+      marker: .git
+      depth: 3
+```
+
+`base` is where the alias's paths are rooted, in all three senses:
+
+- **Discovering**, a source with no `roots` of its own walks `base`, so you
+  name the directory once. A *relative* root (`core-apps`) is resolved
+  against `base`, not the current directory; an absolute root overrides it.
+- **Completing**, candidates under `base` are offered relative to it —
+  `catalog` rather than `/Users/you/src/catalog` — so the short name
+  you'd naturally type is the thing that matches. Candidates that don't live
+  under `base` (URLs, or paths from a source spanning several roots) keep
+  their full form and stay completable that way.
+- **Opening**, the target is joined back onto `base`.
+
+A target that already says where it lives is left alone, so an alias with a
+`base` can still open anything else:
+
+| target | opens |
+| --- | --- |
+| `catalog` | `~/src/catalog` |
+| `core-apps/api` | `~/src/core-apps/api` |
+| `/etc/hosts`, `~/notes.md` | as written |
+| `./local`, `../sibling`, `.` | as written |
+| `https://example.com` | as written |
+
+Note that only a leading `./` or `../` escapes — a dotfile like `.zshrc`
+is an ordinary relative target and joins onto `base` as you'd expect.
+
+> [!WARNING]
+> Write `base: $HOME` or `base: "~"`, never a bare `base: ~` — YAML reads
+> that as null. `opener` rejects it rather than silently ignoring the
+> setting.
 
 ### `sources`
 
@@ -167,14 +219,19 @@ aliases:
 
 Notes:
 
+- `base`, `roots`, and `items` are expanded for `$VAR` / `${VAR}` and a
+  leading `~`. An **unset** variable is left in place verbatim rather than
+  becoming the empty string, so a typo surfaces as a path that visibly does
+  not exist instead of silently collapsing `$SRC_ROT/repo` into `/repo`.
 - A root that is absolute or starts with `~` yields **absolute** candidates; a
   relative root (`.`, `sub/`) yields candidates relative to the current
-  directory.
+  directory — or to the alias's [`base`](#base), if it has one.
 - `depth` counts levels below a root (`1` = direct children). A negative depth
   is unlimited.
 - `files` / `dirs` never descend into hidden directories (names starting with
   `.`).
 - `command` runs via `sh -c`, so pipes and globs work; `stderr` is discarded
   and it is killed after 2 seconds.
-- Completion candidates are always full values (full paths, full URLs) so that,
-  say, a repo named `opener` under two different roots is unambiguous.
+- Completion candidates are full values (full paths, full URLs) so that, say,
+  a repo named `opener` under two different roots is unambiguous — unless the
+  alias sets a [`base`](#base), which shortens the ones beneath it.

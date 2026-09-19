@@ -33,8 +33,11 @@ type Action struct {
 //
 // An alias's cmd is split into words the way a shell would (quotes
 // honored), never run through a shell, with targets appended to the
-// resulting argv. An alias's source, if any, is not consulted here: targets
-// are passed through exactly as typed.
+// resulting argv. An alias's source, if any, is not consulted here.
+//
+// Targets are passed through exactly as typed unless the alias sets a
+// `base:`, in which case each target that is not already anchored
+// elsewhere is joined onto it - see base.Base.Anchor.
 func Resolve(alias string, targets []string, cfg *config.Config, logger diagnostic.Logger) (Action, error) {
 	logger.Debug("alias: %s", alias)
 	for _, target := range targets {
@@ -48,6 +51,16 @@ func Resolve(alias string, targets []string, cfg *config.Config, logger diagnost
 	}
 	if a.App == "" && a.Cmd == "" {
 		return Action{}, fmt.Errorf("alias %q has neither app nor cmd configured", alias)
+	}
+
+	if a.Base.IsSet() {
+		logger.Debug("base: %s", a.Base)
+		anchored := make([]string, len(targets))
+		for i, target := range targets {
+			anchored[i] = a.Base.Anchor(target)
+			logger.Debug("rebased target: %s", anchored[i])
+		}
+		targets = anchored
 	}
 
 	if a.Cmd != "" {
